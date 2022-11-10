@@ -1,0 +1,262 @@
+---
+output:
+  pdf_document: default
+---
+# Setup Chunks
+
+These chunks are as follows:
+- R Markdown setup chunk
+- Load libraries required for execution
+- Create two vectors - one with a list of URLs of all datasets since October 2015 from the NHS Scotland Open data website. The other contains a list of values representing the month and year of the datasets in the format mmyyyy. This full chunk is not included as it would take up most of the report!
+
+```{r Setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r LoadLibraries, message=FALSE}
+library(tidyverse)
+library(lubridate)
+library(readxl)
+library(ggplot2)
+library(gt)
+library(purrr)
+library(here)
+library(janitor)
+library(data.table)
+```
+
+# Data Import and Wrangle
+
+## Setup custom functions
+
+### Camel
+This uses the `clean_names()` function from `janitor` but implements it with CamelCase rather than snake_case.
+
+```{r}
+Camel <- function(Dataset) {
+  Dataset %>% 
+  clean_names(., "upper_camel")
+}
+```
+
+### Wrangle
+
+This function will perform an analysis pipeline on the data in a DRY way.
+
+```{r WrangleFunction}
+Wrangle <- function(DatasetToWrangle)
+{
+  DatasetToWrangle <- DatasetToWrangle %>%
+    filter(GPPractice %in% GPPractices$PracticeCode) %>%
+    mutate(HB = case_when(is.na(HBT) ~ HBT2014,!is.na(HBT) ~ HBT)) %>%
+    select(-c(
+      HBT2014,
+      HBT,
+      ClassOfPreparationCode,
+      NumberOfPaidItems,
+      GrossIngredientCost
+    ))
+  DatasetToWrangle <-
+    full_join(DatasetToWrangle, HealthBoards, by = "HB")
+  DatasetToWrangle <-
+    full_join(DatasetToWrangle, GPPractices, by = "GPPractice")
+  DatasetToWrangle <- DatasetToWrangle %>%
+    mutate(HB = HB.x)
+  DatasetToWrangle <-
+    full_join(DatasetToWrangle, SIMD, by = c("DataZone", "HB"))
+  DatasetToWrangle <- DatasetToWrangle %>%
+    select(-c(HB.x, HB.y, PracticeCode, DZ, HBcode)) %>%
+    drop_na()
+    #Camel()
+  return(DatasetToWrangle)
+}
+```
+
+## Prescriptions in the Community Data
+
+This chunk builds a tibble of the two vectors above. It also includes some use of `lubridate` functions to perform some data wrangling.
+
+```{r URLWrangle}
+URLList <- read_csv("https://raw.githubusercontent.com/s1906007/wonky-broccoli-yellow/main/Data/URLList.csv") %>% 
+  mutate(YearMonths = ym(YearMonths)) %>%
+  mutate(Month = month(YearMonths)) %>%
+  mutate(Year = year(YearMonths))
+```
+
+This chunk imports all the data from the NHS Scotland Open Data website and stores each month as an R dataframe. This will take an hour or more to run!
+
+```{r PullAllDataFiles}
+URLList <- URLList %>% 
+  mutate(MonthYear = paste0(Year, Month))
+
+for (row in 1:nrow(URLList)) {
+  assign(paste0("DF", URLList$MonthYear[row]), read_csv(URLList$URLs[row]))
+  row = row + 1
+}
+```
+
+```{r RegExBindDataFrames}
+DFList <- mget(ls(pattern = "DF20"))
+CompletePrescriptionDataset <- bind_rows(DFList)
+rm(list = ls(pattern = "DF"))
+```
+
+```{r ReadOrWriteRDS, eval=FALSE, include=FALSE}
+#writeRDS(CompletePrescriptionDataset, here("Data", "CompletePrescriptionDataset.RDS"))
+CompletePrescriptionDataset <- readRDS(here("Data", "CompletePrescriptionDataset.RDS"))
+```
+
+## Other Datasets
+
+We'll also import three more datasets. Health Board names and codes, GP Practice data and codes, and the Scottish Index of Multiple Deprivation data from 2020.
+
+```{r LoadAndWranlgeOtherDatasets}
+#Health Boards
+HBCodes <- read_csv("https://raw.githubusercontent.com/s1906007/wonky-broccoli-yellow/main/Data/HBCodes.csv")
+
+HealthBoards <-
+  read_csv(
+    "https://www.opendata.nhs.scot/dataset/9f942fdb-e59e-44f5-b534-d6e17229cc7b/resource/652ff726-e676-4a20-abda-435b98dd7bdc/download/hb14_hb19.csv"
+  )
+HealthBoards <- HealthBoards %>%
+  select(c(HB, HBName))
+HealthBoards <-
+  full_join(HealthBoards, HBCodes %>% select(-HBName), by = c("HB"))
+
+#Scottish Index of Multiple Deprivation
+download.file(
+  "https://www.gov.scot/binaries/content/documents/govscot/publications/statistics/2020/01/scottish-index-of-multiple-deprivation-2020-data-zone-look-up-file/documents/scottish-index-of-multiple-deprivation-data-zone-look-up/scottish-index-of-multiple-deprivation-data-zone-look-up/govscot%3Adocument/SIMD%2B2020v2%2B-%2Bdatazone%2Blookup.xlsx",
+  (here("Data", "SIMD.xlsx"))
+)
+
+SIMD <- read_excel((here("Data", "SIMD.xlsx")), sheet = 3)
+
+SIMD <- SIMD %>%
+  select(
+    c(
+      DZ,
+      SIMD2020v2_Vigintile,
+      SIMD2020_Health_Domain_Rank,
+      Population,
+      URclass,
+      URname,
+      HBcode
+    )
+  ) %>%
+  mutate(DataZone = DZ) %>%
+  mutate(HB = HBcode)
+
+#GP Practices
+GPPractices <-
+  read_csv(
+    "https://www.opendata.nhs.scot/dataset/f23655c3-6e23-4103-a511-a80d998adb90/resource/1a15cb34-fcf9-4d3f-ad63-1ba3e675fbe2/download/practice_contactdetails_oct2022-open-data.csv"
+  )
+
+GPPractices <- GPPractices %>%
+  select(c(PracticeCode, PracticeListSize, Postcode, HB, DataZone)) %>%
+  #NEED TO ADD COMMUNITY PHARMACY HERE
+  mutate(GPPractice = PracticeCode)
+#PracticeCode = 99998
+#PracticeName = "Community Pharmacy"
+
+#Numbers of women who would be elegible for contraceptive prescriptions
+download.file(
+  "https://www.scotlandscensus.gov.uk/media/rfzlmc3l/scotland-blk.zip",
+  here("Data", "scotland-blk.zip")
+)
+AgeBySex <-
+  read_csv(unzip(here("Data", "scotland-blk.zip"), files = "DC1117SC.csv", exdir = here("Data")))
+ReproActive <- AgeBySex %>%
+  mutate(Age = ...2) %>%
+  select(Age, Females) %>%
+  filter(between(Age, 16, 49))
+
+ReproNum <- sum(ReproActive[["Females"]])
+```
+
+# Contraception
+
+## Short-acting
+
+### Tablets
+
+```{r TabletsData}
+Tablet <- CompletePrescriptionDataset %>%
+  filter(str_detect(BNFItemCode, "0703010")) %>%
+  filter(str_detect(BNFItemDescription, "TAB"))
+
+Tablet <- bind_rows(Tablet, CompletePrescriptionDataset %>% filter(str_detect(BNFItemCode, "0703021")))
+```
+
+## LARC
+
+### Injections
+
+```{r InjectionsData}
+Injection <- CompletePrescriptionDataset %>% 
+  filter(str_detect(BNFItemCode, "0703022M"))
+```
+
+### IUS
+
+```{r IUSData}
+IUS <- CompletePrescriptionDataset %>% 
+  filter(str_detect(BNFItemCode, "0703023"))
+```
+
+### IUD
+
+```{r IUDData}
+IUD <- CompletePrescriptionDataset %>% 
+  filter(str_detect(BNFItemCode, "21040"))
+```
+
+### Implants
+
+```{r ImplantsData}
+Implant <- CompletePrescriptionDataset %>% 
+  filter(str_detect(BNFItemDescription, "NEXPLANON"))
+```
+
+## Emergency Contraception
+
+```{r EmergencyContraceptionData}
+EmergencyContraception <- CompletePrescriptionDataset %>% 
+  filter(str_detect(BNFItemCode, "0703050"))
+```
+
+
+```{r WrangleContraceptivesData}
+EmergencyContraception <- Wrangle(EmergencyContraception)
+Implant <- Wrangle(Implant)
+Injection <- Wrangle(Injection)
+IUD <- Wrangle(IUD)
+IUS <- Wrangle(IUS)
+Tablet <- Wrangle(Tablet)
+```
+
+
+```{r LARCJoins}
+LARC <- full_join(Implant, Injection)
+LARC <- full_join(LARC, IUD)
+LARC <- full_join(LARC, IUS)
+```
+
+```{r WranglingAndPlottingLARC}
+LARCSmall <- LARC %>% 
+  select(HB, PaidQuantity, PaidDateMonth) %>% 
+  mutate(HB = as.factor(HB)) %>% 
+  mutate(PaidDateMonth = as.factor(PaidDateMonth)) %>%
+  group_by(HB, PaidDateMonth) %>% 
+  summarise(sum(PaidQuantity)) %>% 
+  pivot_wider(names_from = HB, values_from = `sum(PaidQuantity)`)
+  
+
+LARCSmall %>% 
+  ggplot(aes(x = PaidDateMonth, y = S08000015)) +
+  geom_point() 
+
+  facet_wrap(facets = vars(HB))
+```
+
+
