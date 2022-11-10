@@ -77,7 +77,7 @@ Wrangle <- function(DatasetToWrangle)
 This chunk builds a tibble of the two vectors above. It also includes some use of `lubridate` functions to perform some data wrangling.
 
 ```{r URLWrangle}
-URLList <- read_csv("https://raw.githubusercontent.com/s1906007/wonky-broccoli-yellow/main/Data/URLList.csv") %>% 
+URLList <- read_csv("https://raw.githubusercontent.com/s1906007/expert-octo-pancake/main/Data/URLList.csv") %>% 
   mutate(YearMonths = ym(YearMonths)) %>%
   mutate(Month = month(YearMonths)) %>%
   mutate(Year = year(YearMonths))
@@ -112,7 +112,7 @@ We'll also import three more datasets. Health Board names and codes, GP Practice
 
 ```{r LoadAndWranlgeOtherDatasets}
 #Health Boards
-HBCodes <- read_csv("https://raw.githubusercontent.com/s1906007/wonky-broccoli-yellow/main/Data/HBCodes.csv")
+HBCodes <- read_csv("https://raw.githubusercontent.com/s1906007/expert-octo-pancake/main/Data/HBCodes.csv")
 
 HealthBoards <-
   read_csv(
