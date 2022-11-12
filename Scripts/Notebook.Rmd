@@ -1,5 +1,8 @@
 ---
 output:
+  title: "Other geographical units in the prescribing dataset"
+  author: "Data Science in Biomedicine - Assessment"
+  date: "`r Sys.Date()`"
   pdf_document: default
 ---
 # Setup Chunks
@@ -21,8 +24,6 @@ library(ggplot2)
 library(gt)
 library(purrr)
 library(here)
-library(janitor)
-library(data.table)
 ```
 
 # Data Import and Wrangle
@@ -47,8 +48,8 @@ This function will perform an analysis pipeline on the data in a DRY way.
 Wrangle <- function(DatasetToWrangle)
 {
   DatasetToWrangle <- DatasetToWrangle %>%
-    filter(GPPractice %in% GPPractices$PracticeCode) %>%
-    mutate(HB = case_when(is.na(HBT) ~ HBT2014,!is.na(HBT) ~ HBT)) %>%
+    filter(GPPractice %in% GPPractices$GPPractice) %>%
+    mutate(HB = case_when(is.na(HBT) ~ HBT2014, !is.na(HBT) ~ HBT)) %>%
     select(-c(
       HBT2014,
       HBT,
@@ -65,9 +66,34 @@ Wrangle <- function(DatasetToWrangle)
   DatasetToWrangle <-
     full_join(DatasetToWrangle, SIMD, by = c("DataZone", "HB"))
   DatasetToWrangle <- DatasetToWrangle %>%
-    select(-c(HB.x, HB.y, PracticeCode, DZ, HBcode)) %>%
-    drop_na()
-    #Camel()
+    select(-c(HB.x, HB.y, DZ, HBcode)) %>%
+    drop_na() %>%
+    mutate(HealthBoard = HB) %>%
+    mutate(SIMDOverallRank = SIMD2020v2_Vigintile) %>%
+    mutate(SIMDHealthRank = SIMD2020_Health_Domain_Rank) %>%
+    mutate(UrbanRuralCode = URclass) %>%
+    mutate(UrbanRuralDescription = URname) %>%
+    select(-c(
+      HB,
+      SIMD2020v2_Vigintile,
+      SIMD2020_Health_Domain_Rank,
+      URclass,
+      URname
+    )) %>%
+    mutate(HealthBoard = as.factor(HealthBoard)) %>%
+    mutate(SIMDOverallRank = as.factor(SIMDOverallRank)) %>%
+    mutate(SIMDHealthRank = as.factor(SIMDHealthRank)) %>%
+    mutate(UrbanRuralCode = as.factor(UrbanRuralCode)) %>%
+    mutate(UrbanRuralDescription = as.factor(UrbanRuralDescription)) %>%
+    mutate(Postcode = as.factor(Postcode)) %>%
+    mutate(DataZone = as.factor(DataZone)) %>%
+    mutate(HBName = as.factor(HBName)) %>%
+    mutate(HealthBoardCode = as.factor(HealthBoardCode)) %>%
+    mutate(GPPractice = as.factor(GPPractice)) %>% 
+    mutate(PaidDateMonth = lubridate::ymd(PaidDateMonth)) %>% 
+    mutate(Month = lubridate::month(PaidDateMonth)) %>%
+    mutate(Year = lubridate::year(PaidDateMonth))
+  
   return(DatasetToWrangle)
 }
 ```
@@ -110,7 +136,7 @@ CompletePrescriptionDataset <- readRDS(here("Data", "CompletePrescriptionDataset
 
 We'll also import three more datasets. Health Board names and codes, GP Practice data and codes, and the Scottish Index of Multiple Deprivation data from 2020.
 
-```{r LoadAndWranlgeOtherDatasets}
+```{r LoadAndWrangleOtherDatasets}
 #Health Boards
 HBCodes <- read_csv("https://raw.githubusercontent.com/s1906007/expert-octo-pancake/main/Data/HBCodes.csv")
 
@@ -154,10 +180,14 @@ GPPractices <-
 
 GPPractices <- GPPractices %>%
   select(c(PracticeCode, PracticeListSize, Postcode, HB, DataZone)) %>%
-  #NEED TO ADD COMMUNITY PHARMACY HERE
-  mutate(GPPractice = PracticeCode)
-#PracticeCode = 99998
-#PracticeName = "Community Pharmacy"
+  mutate(GPPractice = PracticeCode) %>% 
+  select(-PracticeCode)
+
+#Add COMMUNITY PHARMACY row
+CommunityPharmacies <- list(5295403, "ALL SCO", "S92000003", "S92000003", 99998)
+
+GPPractices <- rbind(GPPractices, CommunityPharmacies)
+
 
 #Numbers of women who would be elegible for contraceptive prescriptions
 download.file(
@@ -235,12 +265,18 @@ IUS <- Wrangle(IUS)
 Tablet <- Wrangle(Tablet)
 ```
 
-
 ```{r LARCJoins}
 LARC <- full_join(Implant, Injection)
 LARC <- full_join(LARC, IUD)
 LARC <- full_join(LARC, IUS)
 ```
+
+
+
+
+
+Good to here!
+
 
 ```{r WranglingAndPlottingLARC}
 LARCSmall <- LARC %>% 
@@ -259,4 +295,28 @@ LARCSmall %>%
   facet_wrap(facets = vars(HB))
 ```
 
+```{r}
+library(scales)
+
+ggplot(df, aes(x=days, y=value, color=factor(year(date)))) +
+  geom_line()+scale_x_date(labels = date_format("%b"))
+
+LARCGroup <- LARC %>%
+  group_by(across(c(HealthBoardCode, PaidDateMonth)))
+summarise(across(sum(PaidQuantity))) %>%
+  ggplot(
+    aes(x = PaidDateMonth, y = sum(PaidQuantity)) +
+      geom_point() +
+      facet_wrap( ~ year(PaidDateMonth), scales = "free") +
+      scale_x_date(date_labels = "%b"
+      ))
+
+  
+# Works
+LARC %>% 
+  filter(HealthBoardCode == "AaA") %>% 
+  ggplot(aes(x = PaidDateMonth, y = PaidQuantity)) +
+  geom_point() +
+  scale_x_date()
+```
 
