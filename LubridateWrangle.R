@@ -66,15 +66,10 @@ sum(LARC[which(LARC$team == 'A' | df$team =='C'), 3])
 
 
 ###########3
-LARCTest3 <- LARC %>%
+LARCTest3 <- Tablet %>%
   group_by(PaidDateMonth, HealthBoardCode) %>% 
   summarise(SumPaidQuantity = sum(PaidQuantity),
-            .groups = 'drop')
-#################
-
-
-
-LARCTest3 %>%
+            .groups = 'drop') %>%
   ggplot(aes(x = PaidDateMonth, y = SumPaidQuantity)) +
   geom_rect(
     data = LARCTest3,
@@ -87,12 +82,35 @@ LARCTest3 %>%
     fill = "yellow",
     alpha = 0.1
   ) +
-  
-  geom_point() +
+  geom_rect(
+    data = LARCTest3,
+    mapping = aes(
+      xmin = dmy("26/12/2020"),
+      xmax = dmy("16/04/2021"),
+      ymin = -Inf,
+      ymax = Inf
+    ),
+    fill = "yellow",
+    alpha = 0.1
+  ) +
+  geom_rect(
+    data = LARCTest3,
+    mapping = aes(
+      xmin = dmy("26/12/2021"),
+      xmax = dmy("21/03/2022"),
+      ymin = -Inf,
+      ymax = Inf
+    ),
+    fill = "yellow",
+    alpha = 0.1
+  ) +
+geom_point() +
   scale_x_date() +
   facet_wrap( ~ HealthBoardCode, ncol = 2, scales = "free") +
   theme_minimal() +
-  geom_line(colour = "blue") 
+  geom_line(colour = "blue") +
+  scale_fill_brewer(palette="Spectral")
+
 
 
 p + 

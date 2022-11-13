@@ -1,8 +1,5 @@
 ---
 output:
-  title: "Other geographical units in the prescribing dataset"
-  author: "Data Science in Biomedicine - Assessment"
-  date: "`r Sys.Date()`"
   pdf_document: default
 ---
 # Setup Chunks
@@ -28,19 +25,7 @@ library(here)
 
 # Data Import and Wrangle
 
-## Setup custom functions
-
-### Camel
-This uses the `clean_names()` function from `janitor` but implements it with CamelCase rather than snake_case.
-
-```{r}
-Camel <- function(Dataset) {
-  Dataset %>% 
-  clean_names(., "upper_camel")
-}
-```
-
-### Wrangle
+## Setup custom function - Wrangle
 
 This function will perform an analysis pipeline on the data in a DRY way.
 
@@ -90,9 +75,7 @@ Wrangle <- function(DatasetToWrangle)
     mutate(HBName = as.factor(HBName)) %>%
     mutate(HealthBoardCode = as.factor(HealthBoardCode)) %>%
     mutate(GPPractice = as.factor(GPPractice)) %>% 
-    mutate(PaidDateMonth = lubridate::ymd(PaidDateMonth)) %>% 
-    mutate(Month = lubridate::month(PaidDateMonth)) %>%
-    mutate(Year = lubridate::year(PaidDateMonth))
+    mutate(PaidDateMonth = ym(PaidDateMonth))
   
   return(DatasetToWrangle)
 }
@@ -104,8 +87,8 @@ This chunk builds a tibble of the two vectors above. It also includes some use o
 
 ```{r URLWrangle}
 URLList <- read_csv("https://raw.githubusercontent.com/s1906007/expert-octo-pancake/main/Data/URLList.csv") %>% 
-  mutate(YearMonths = ym(YearMonths)) %>%
-  mutate(Month = month(YearMonths)) %>%
+  mutate(YearMonths = ym(YearMonths)) %>% 
+  mutate(Month = month(YearMonths)) %>% 
   mutate(Year = year(YearMonths))
 ```
 
@@ -119,17 +102,10 @@ for (row in 1:nrow(URLList)) {
   assign(paste0("DF", URLList$MonthYear[row]), read_csv(URLList$URLs[row]))
   row = row + 1
 }
-```
-
-```{r RegExBindDataFrames}
+#RegExBindDataFrames
 DFList <- mget(ls(pattern = "DF20"))
 CompletePrescriptionDataset <- bind_rows(DFList)
 rm(list = ls(pattern = "DF"))
-```
-
-```{r ReadOrWriteRDS, eval=FALSE, include=FALSE}
-#writeRDS(CompletePrescriptionDataset, here("Data", "CompletePrescriptionDataset.RDS"))
-CompletePrescriptionDataset <- readRDS(here("Data", "CompletePrescriptionDataset.RDS"))
 ```
 
 ## Other Datasets
@@ -188,7 +164,6 @@ CommunityPharmacies <- list(5295403, "ALL SCO", "S92000003", "S92000003", 99998)
 
 GPPractices <- rbind(GPPractices, CommunityPharmacies)
 
-
 #Numbers of women who would be elegible for contraceptive prescriptions
 download.file(
   "https://www.scotlandscensus.gov.uk/media/rfzlmc3l/scotland-blk.zip",
@@ -204,119 +179,132 @@ ReproActive <- AgeBySex %>%
 ReproNum <- sum(ReproActive[["Females"]])
 ```
 
-# Contraception
+# Contraception Data
 
-## Short-acting
-
-### Tablets
-
-```{r TabletsData}
+```{r ContraceptionData}
+#Tablets
 Tablet <- CompletePrescriptionDataset %>%
   filter(str_detect(BNFItemCode, "0703010")) %>%
   filter(str_detect(BNFItemDescription, "TAB"))
 
 Tablet <- bind_rows(Tablet, CompletePrescriptionDataset %>% filter(str_detect(BNFItemCode, "0703021")))
-```
 
-## LARC
-
-### Injections
-
-```{r InjectionsData}
+#Injections
 Injection <- CompletePrescriptionDataset %>% 
   filter(str_detect(BNFItemCode, "0703022M"))
-```
 
-### IUS
-
-```{r IUSData}
+#IUS
 IUS <- CompletePrescriptionDataset %>% 
   filter(str_detect(BNFItemCode, "0703023"))
-```
 
-### IUD
-
-```{r IUDData}
+#IUD
 IUD <- CompletePrescriptionDataset %>% 
   filter(str_detect(BNFItemCode, "21040"))
-```
 
-### Implants
-
-```{r ImplantsData}
+#Implants
 Implant <- CompletePrescriptionDataset %>% 
   filter(str_detect(BNFItemDescription, "NEXPLANON"))
-```
 
-## Emergency Contraception
-
-```{r EmergencyContraceptionData}
+#Emergency Contraception
 EmergencyContraception <- CompletePrescriptionDataset %>% 
   filter(str_detect(BNFItemCode, "0703050"))
-```
 
-
-```{r WrangleContraceptivesData}
+#Wrangle Contraceptive Data
 EmergencyContraception <- Wrangle(EmergencyContraception)
 Implant <- Wrangle(Implant)
 Injection <- Wrangle(Injection)
 IUD <- Wrangle(IUD)
 IUS <- Wrangle(IUS)
 Tablet <- Wrangle(Tablet)
-```
 
-```{r LARCJoins}
+#Create Long Acting Reversible Contraception
 LARC <- full_join(Implant, Injection)
 LARC <- full_join(LARC, IUD)
 LARC <- full_join(LARC, IUS)
 ```
 
+```{r PlottingLARCData}
+LARCPlotData <- LARC %>%
+  group_by(PaidDateMonth, HealthBoardCode) %>%
+  summarise(SumPaidQuantity = sum(PaidQuantity),
+            .groups = 'drop')
 
+HealthBoardLabels <-
+  c(
+    "NHS Ayrshire and Arran",
+    "NHS Borders",
+    "NHS Dumfries and Galloway",
+    "NHS Fife",
+    "NHS Forth Valley",
+    "NHS Grampian",
+    "NHS Greater Glasgow and Clyde",
+    "NHS Highland",
+    "NHS Lanarkshire",
+    "NHS Lothian",
+    "NHS Orkney",
+    "NHS Shetland",
+    "NHS Tayside",
+    "NHS Western Isles"
+  )
 
+names(HealthBoardLabels) <-
+  c(
+    "AaA",
+    "Bor",
+    "DaG",
+    "Fif",
+    "FoV",
+    "Gra",
+    "GGC",
+    "Hig",
+    "Lan",
+    "Lot",
+    "Ork",
+    "She",
+    "Tay",
+    "WIs"
+  )
 
+LARCPlot <- LARCPlotData %>%
+  ggplot(aes(x = PaidDateMonth, y = SumPaidQuantity)) +
+  geom_rect(aes(
+    xmin = dmy("23/03/2020"),
+    xmax = dmy("19/07/2020"),
+    ymin = -Inf,
+    ymax = Inf
+  ),
+  fill = "yellow",
+  alpha = 0.25) +
+  geom_rect(aes(
+    xmin = dmy("26/12/2020"),
+    xmax = dmy("16/04/2021"),
+    ymin = -Inf,
+    ymax = Inf
+  ),
+  fill = "yellow",
+  alpha = 0.25) +
+  geom_rect(aes(
+    xmin = dmy("26/12/2021"),
+    xmax = dmy("21/03/2022"),
+    ymin = -Inf,
+    ymax = Inf
+  ),
+  fill = "yellow",
+  alpha = 0.25) +
+  geom_line(mapping = aes(colour = HealthBoardCode)) +
+  geom_point(mapping = aes(colour = HealthBoardCode),
+             shape = 1) +
+  scale_x_date() +
+  facet_wrap(
+    ~ HealthBoardCode,
+    ncol = 2,
+    scales = "free",
+    labeller = labeller(HealthBoardCode = HealthBoardLabels)
+  ) +
+  theme_minimal() +
+  scale_fill_brewer(palette = "Spectral") +
+  labs(title = "Long Acting Reversible Contraception Prescriptions Issued by NHS Scotland by Health Board", x = "Month and Year Prescription Dispensed", y = "Sum of Prescriptions Issued") +
+  theme(legend.position = "none")
 
-Good to here!
-
-
-```{r WranglingAndPlottingLARC}
-LARCSmall <- LARC %>% 
-  select(HB, PaidQuantity, PaidDateMonth) %>% 
-  mutate(HB = as.factor(HB)) %>% 
-  mutate(PaidDateMonth = as.factor(PaidDateMonth)) %>%
-  group_by(HB, PaidDateMonth) %>% 
-  summarise(sum(PaidQuantity)) %>% 
-  pivot_wider(names_from = HB, values_from = `sum(PaidQuantity)`)
-  
-
-LARCSmall %>% 
-  ggplot(aes(x = PaidDateMonth, y = S08000015)) +
-  geom_point() 
-
-  facet_wrap(facets = vars(HB))
+LARCPlot
 ```
-
-```{r}
-library(scales)
-
-ggplot(df, aes(x=days, y=value, color=factor(year(date)))) +
-  geom_line()+scale_x_date(labels = date_format("%b"))
-
-LARCGroup <- LARC %>%
-  group_by(across(c(HealthBoardCode, PaidDateMonth)))
-summarise(across(sum(PaidQuantity))) %>%
-  ggplot(
-    aes(x = PaidDateMonth, y = sum(PaidQuantity)) +
-      geom_point() +
-      facet_wrap( ~ year(PaidDateMonth), scales = "free") +
-      scale_x_date(date_labels = "%b"
-      ))
-
-  
-# Works
-LARC %>% 
-  filter(HealthBoardCode == "AaA") %>% 
-  ggplot(aes(x = PaidDateMonth, y = PaidQuantity)) +
-  geom_point() +
-  scale_x_date()
-```
-
