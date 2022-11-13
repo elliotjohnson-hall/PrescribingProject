@@ -357,3 +357,103 @@ LARCPlotsPatchwork <- wrap_plots(LARCPlot,
 #Output =
 LARCPlotsPatchwork
 ```
+
+```{r}
+LARCTableDataPreCovid <- LARC %>%
+  group_by(PaidDateMonth) %>%
+  summarise(SumPaidQuantity = sum(PaidQuantity),
+            .groups = 'drop') %>%
+  filter(between(PaidDateMonth, as_date("2015-10-01"), as_date("2020-03-22"))) %>%
+  group_by(year(PaidDateMonth)) %>%
+  summarise(MeanPaidQuantity = mean(SumPaidQuantity),
+            .groups = 'drop')
+  
+LARCTableDataLockdown1 <- LARC %>% 
+    group_by(PaidDateMonth) %>%
+  summarise(SumPaidQuantity = sum(PaidQuantity),
+            .groups = 'drop') %>%
+  filter(between(PaidDateMonth, as_date("2020-03-23"), as_date("2020-07-19"))) %>%
+  summarise(MeanPaidQuantity = mean(SumPaidQuantity))
+
+LARCTableDataPostLockdown1 <- LARC %>% 
+    group_by(PaidDateMonth) %>%
+  summarise(SumPaidQuantity = sum(PaidQuantity),
+            .groups = 'drop') %>%
+  filter(between(PaidDateMonth, as_date("2020-07-20"), as_date("2020-12-25"))) %>%
+  summarise(MeanPaidQuantity = mean(SumPaidQuantity))
+
+
+LARCTableDataLockdown2 <- LARC %>% 
+    group_by(PaidDateMonth) %>%
+  summarise(SumPaidQuantity = sum(PaidQuantity),
+            .groups = 'drop') %>%
+  filter(between(PaidDateMonth, as_date("2020-12-26"), as_date("2021-04-16"))) %>%
+  summarise(MeanPaidQuantity = mean(SumPaidQuantity))
+
+LARCTableDataPostLockdown2 <- LARC %>% 
+    group_by(PaidDateMonth) %>%
+  summarise(SumPaidQuantity = sum(PaidQuantity),
+            .groups = 'drop') %>%
+  filter(between(PaidDateMonth, as_date("2021-04-17"), as_date("2021-12-25"))) %>%
+  summarise(MeanPaidQuantity = mean(SumPaidQuantity))
+
+LARCTableDataLockdown3 <- LARC %>% 
+    group_by(PaidDateMonth) %>%
+  summarise(SumPaidQuantity = sum(PaidQuantity),
+            .groups = 'drop') %>%
+  filter(between(PaidDateMonth, as_date("2021-12-26"), as_date("2022-03-21"))) %>%
+  summarise(MeanPaidQuantity = mean(SumPaidQuantity))
+
+LARCTableDataPostLockdown3 <- LARC %>% 
+    group_by(PaidDateMonth) %>%
+  summarise(SumPaidQuantity = sum(PaidQuantity),
+            .groups = 'drop') %>%
+  filter(between(PaidDateMonth, as_date("2022-03-22"), as_date("2022-07-01"))) %>%
+  summarise(MeanPaidQuantity = mean(SumPaidQuantity))
+
+LARCTableDataPreCovid <- LARCTableDataPreCovid %>% 
+  mutate(TimePeriod = `year(PaidDateMonth)`) %>% 
+  select(-`year(PaidDateMonth)`)
+
+LARCTableDataLockdown1 <- LARCTableDataLockdown1 %>% 
+  mutate(TimePeriod = c("Lockdown 1"))
+
+LARCTableDataPostLockdown1 <- LARCTableDataPostLockdown1 %>% 
+  mutate(TimePeriod = c("Post-Lockdown 1"))
+  
+LARCTableDataLockdown2 <- LARCTableDataLockdown2 %>% 
+  mutate(TimePeriod = c("Lockdown 2"))
+
+LARCTableDataPostLockdown2 <- LARCTableDataPostLockdown2 %>% 
+  mutate(TimePeriod = c("Post-Lockdown 2"))
+
+LARCTableDataLockdown3 <- LARCTableDataLockdown3 %>% 
+  mutate(TimePeriod = c("Lockdown 3"))
+
+LARCTableDataPostLockdown3 <- LARCTableDataPostLockdown3 %>% 
+  mutate(TimePeriod = c("Post-Lockdown 3"))
+
+LARCTableDataPreCovid <- LARCTableDataPreCovid %>% 
+  mutate(TimePeriod = as.character(TimePeriod))
+
+LARCTableData <- bind_rows(LARCTableDataPreCovid, LARCTableDataLockdown1, LARCTableDataPostLockdown1, LARCTableDataLockdown2, LARCTableDataPostLockdown2, LARCTableDataLockdown3, LARCTableDataPostLockdown3)
+
+rm(LARCTableDataPreCovid, LARCTableDataLockdown1, LARCTableDataPostLockdown1, LARCTableDataLockdown2, LARCTableDataPostLockdown2, LARCTableDataLockdown3, LARCTableDataPostLockdown3)
+
+LARCTableData %>% 
+  gt()
+```
+
+```{r}
+LARCTable <- LARC %>%
+  group_by(PaidDateMonth) %>%
+  summarise(SumPaidQuantity = sum(PaidQuantity),
+            .groups = 'drop') %>%
+  filter(between(PaidDateMonth, as_date("2020-03-23"), as_date("2020-07-19"))) %>%
+  summarise(MeanPaidQuantity = mean(SumPaidQuantity),
+            .groups = 'drop') %>%
+  group_by(PaidDateMonth) %>%
+  summarise(SumPaidQuantity = sum(PaidQuantity),
+            .groups = 'drop') %>%
+  gt()
+```
