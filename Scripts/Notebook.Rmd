@@ -96,7 +96,7 @@ URLList <- read_csv("https://raw.githubusercontent.com/s1906007/expert-octo-panc
 
 This chunk imports all the data from the NHS Scotland Open Data website and stores each month as an R dataframe. This will take an hour or more to run!
 
-```{r PullAllDataFiles}
+```{r PullAllDataFiles, results='hide', message=FALSE}
 URLList <- URLList %>% 
   mutate(MonthYear = paste0(Year, Month))
 
