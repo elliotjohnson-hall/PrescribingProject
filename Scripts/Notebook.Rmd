@@ -21,6 +21,8 @@ library(ggplot2)
 library(gt)
 library(purrr)
 library(here)
+library(colorspace)
+library(patchwork)
 ```
 
 # Data Import and Wrangle
@@ -75,7 +77,7 @@ Wrangle <- function(DatasetToWrangle)
     mutate(HBName = as.factor(HBName)) %>%
     mutate(HealthBoardCode = as.factor(HealthBoardCode)) %>%
     mutate(GPPractice = as.factor(GPPractice)) %>% 
-    mutate(PaidDateMonth = ym(PaidDateMonth))
+    mutate(PaidDateMonth = ymd(PaidDateMonth))
   
   return(DatasetToWrangle)
 }
@@ -224,6 +226,8 @@ LARC <- full_join(LARC, IUS)
 ```
 
 ```{r PlottingLARCData}
+# Plot per Health Board (Panel A)
+#Initialise Data for Health Boards
 LARCPlotData <- LARC %>%
   group_by(PaidDateMonth, HealthBoardCode) %>%
   summarise(SumPaidQuantity = sum(PaidQuantity),
@@ -264,31 +268,14 @@ names(HealthBoardLabels) <-
     "Tay",
     "WIs"
   )
-
+#Building the plot
 LARCPlot <- LARCPlotData %>%
   ggplot(aes(x = PaidDateMonth, y = SumPaidQuantity)) +
-  geom_rect(aes(
-    xmin = dmy("23/03/2020"),
-    xmax = dmy("19/07/2020"),
-    ymin = -Inf,
-    ymax = Inf
-  ),
-  fill = "yellow",
-  alpha = 0.25) +
-  geom_rect(aes(
-    xmin = dmy("26/12/2020"),
-    xmax = dmy("16/04/2021"),
-    ymin = -Inf,
-    ymax = Inf
-  ),
-  fill = "yellow",
-  alpha = 0.25) +
-  geom_rect(aes(
-    xmin = dmy("26/12/2021"),
-    xmax = dmy("21/03/2022"),
-    ymin = -Inf,
-    ymax = Inf
-  ),
+  annotate(geom = "rect",
+    xmin = c(dmy("23/03/2020"), dmy("26/12/2020"), dmy("26/12/2021")),
+    xmax = c(dmy("19/07/2020"), dmy("16/04/2021"), dmy("21/03/2022")),
+    ymin = c(-Inf, -Inf, -Inf),
+    ymax = c(Inf, Inf, Inf),
   fill = "yellow",
   alpha = 0.25) +
   geom_line(mapping = aes(colour = HealthBoardCode)) +
@@ -302,9 +289,71 @@ LARCPlot <- LARCPlotData %>%
     labeller = labeller(HealthBoardCode = HealthBoardLabels)
   ) +
   theme_minimal() +
-  scale_fill_brewer(palette = "Spectral") +
-  labs(title = "Long Acting Reversible Contraception Prescriptions Issued by NHS Scotland by Health Board", x = "Month and Year Prescription Dispensed", y = "Sum of Prescriptions Issued") +
-  theme(legend.position = "none")
+  scale_color_discrete_qualitative(palette = "Pastel1") +
+  labs(title = "Long Acting Reversible Contraception Prescriptions \n Issued by NHS Scotland by Health Board", x = "Month and Year Prescription Dispensed", y = "Sum of Prescriptions Issued") +
+  theme(legend.position = "none", plot.title = element_text(hjust = 0.5, face = "bold"), axis.title.x = element_text(face = "bold"), axis.title.y = element_text(face = "bold"), strip.text = element_text(face = "italic"))
 
-LARCPlot
+#Output = 
+#LARCPlot
+
+#Now to build plot for all of Scotland (Panel B)
+LARCPlotDataScotland <- LARC %>%
+  group_by(PaidDateMonth) %>%
+  summarise(SumPaidQuantity = sum(PaidQuantity),
+            .groups = 'drop')
+
+LARCPlotScotland <- LARCPlotDataScotland %>%
+  ggplot(aes(x = PaidDateMonth, y = SumPaidQuantity)) +
+  annotate(geom = "rect",
+    xmin = c(dmy("23/03/2020"), dmy("26/12/2020"), dmy("26/12/2021")),
+    xmax = c(dmy("19/07/2020"), dmy("16/04/2021"), dmy("21/03/2022")),
+    ymin = c(-Inf, -Inf, -Inf),
+    ymax = c(Inf, Inf, Inf),
+  fill = "yellow",
+  alpha = 0.25) +
+  geom_line(colour = "#0391BF") +
+  geom_point(colour = "#0391BF",
+             shape = 1) +
+  scale_x_date() +
+  theme_minimal() +
+  labs(title = "Long Acting Reversible Contraception Prescriptions \n Issued by NHS Scotland", x = "Month and Year Prescription Dispensed", y = "Sum of Prescriptions Issued") +
+  theme(legend.position = "none", plot.title = element_text(hjust = 0.5, face = "bold"), axis.title.x = element_text(face = "bold"), axis.title.y = element_text(face = "bold"), strip.text = element_text(face = "italic"))
+#Output = 
+#LARCPlotScotland
+
+#Now to build plot for all of Scotland but zoomed in on 2020 to 2022 (Panel C)
+LARCPlotDataScotlandZoomed <- LARC %>%
+  group_by(PaidDateMonth) %>%
+  filter(as_date(PaidDateMonth) >= as_date("2020-01-01")) %>% 
+  summarise(SumPaidQuantity = sum(PaidQuantity),
+            .groups = 'drop')
+
+LARCPlotScotlandZoomed <- LARCPlotDataScotlandZoomed %>%
+  ggplot(aes(x = PaidDateMonth, y = SumPaidQuantity)) +
+  annotate(geom = "rect",
+    xmin = c(dmy("23/03/2020"), dmy("26/12/2020"), dmy("26/12/2021")),
+    xmax = c(dmy("19/07/2020"), dmy("16/04/2021"), dmy("21/03/2022")),
+    ymin = c(-Inf, -Inf, -Inf),
+    ymax = c(Inf, Inf, Inf),
+  fill = "yellow",
+  alpha = 0.25) +
+  geom_line(colour = "#0391BF") +
+  geom_point(colour = "#0391BF",
+             shape = 1) +
+  scale_x_date(date_breaks="2 months", date_labels = "%b '%y", minor_breaks = NULL) +
+  theme_minimal() +
+  labs(title = "Long Acting Reversible Contraception Prescriptions \n Issued by NHS Scotland from Jan 2020 to Jul 2022", x = "Month and Year Prescription Dispensed", y = "Sum of Prescriptions Issued") +
+  theme(legend.position = "none", plot.title = element_text(hjust = 0.5, face = "bold"), axis.title.x = element_text(face = "bold"), axis.title.y = element_text(face = "bold"), strip.text = element_text(face = "italic"), axis.text.x.bottom = element_text(angle = 45, margin = margin(t = 10)))
+#Output = 
+#LARCPlotScotlandZoomed
+
+#Now to put A, B & C together to make one plot with `patchwork`
+LARCPlotsPatchwork <- wrap_plots(LARCPlot, 
+           LARCPlotScotland / LARCPlotScotlandZoomed) +
+  plot_layout(widths = c(2,1)) + 
+  plot_annotation(caption = 'Disclaimer: Scales are free on these plots. \n Yellow shaded areas indicate national lockdowns in Scotland.', tag_levels = 'A', title = "Change in Prescribing Rates of Long Acting Reversible Contraception in Scotland over Covid-19 Lockdowns", theme = theme(plot.title = element_text(hjust = 0.5, face = "bold", size = 18))) & 
+  theme(plot.tag = element_text(face = "bold"), plot.margin = margin(5, 5, 5, 5))
+
+#Output =
+LARCPlotsPatchwork
 ```
