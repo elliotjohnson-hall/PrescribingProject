@@ -2,18 +2,22 @@
 output:
   pdf_document: default
 ---
+
 # Setup Chunks
 
-These chunks are as follows:
-- R Markdown setup chunk
-- Load libraries required for execution
-- Create two vectors - one with a list of URLs of all datasets since October 2015 from the NHS Scotland Open data website. The other contains a list of values representing the month and year of the datasets in the format mmyyyy. This full chunk is not included as it would take up most of the report!
+These chunks are as follows: - R Markdown setup chunk - Load libraries
+required for execution - Create two vectors - one with a list of URLs of
+all datasets since October 2015 from the NHS Scotland Open data website.
+The other contains a list of values representing the month and year of
+the datasets in the format mmyyyy. This full chunk is not included as it
+would take up most of the report!
 
 ```{r Setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-```{r LoadLibraries, message=FALSE}
+```{r LoadLibraries, message=FALSE, warning=FALSE}
+library(gtExtras)
 library(tidyverse)
 library(lubridate)
 library(readxl)
@@ -23,13 +27,16 @@ library(purrr)
 library(here)
 library(colorspace)
 library(patchwork)
+library(glue)
+library(fontawesome)
 ```
 
 # Data Import and Wrangle
 
 ## Setup custom function - Wrangle
 
-This function will perform an analysis pipeline on the data in a DRY way.
+This function will perform an analysis pipeline on the data in a DRY
+way.
 
 ```{r WrangleFunction}
 Wrangle <- function(DatasetToWrangle)
@@ -85,16 +92,19 @@ Wrangle <- function(DatasetToWrangle)
 
 ## Prescriptions in the Community Data
 
-This chunk builds a tibble of the two vectors above. It also includes some use of `lubridate` functions to perform some data wrangling.
+This chunk builds a tibble of the two vectors above. It also includes
+some use of `lubridate` functions to perform some data wrangling.
 
-```{r URLWrangle}
+```{r URLWrangle, message=FALSE}
 URLList <- read_csv("https://raw.githubusercontent.com/s1906007/expert-octo-pancake/main/Data/URLList.csv") %>% 
   mutate(YearMonths = ym(YearMonths)) %>% 
   mutate(Month = month(YearMonths)) %>% 
   mutate(Year = year(YearMonths))
 ```
 
-This chunk imports all the data from the NHS Scotland Open Data website and stores each month as an R dataframe. This will take an hour or more to run!
+This chunk imports all the data from the NHS Scotland Open Data website
+and stores each month as an R dataframe. This will take an hour or more
+to run!
 
 ```{r PullAllDataFiles, results='hide', message=FALSE}
 URLList <- URLList %>% 
@@ -112,9 +122,11 @@ rm(list = ls(pattern = "DF"))
 
 ## Other Datasets
 
-We'll also import three more datasets. Health Board names and codes, GP Practice data and codes, and the Scottish Index of Multiple Deprivation data from 2020.
+We'll also import three more datasets. Health Board names and codes, GP
+Practice data and codes, and the Scottish Index of Multiple Deprivation
+data from 2020.
 
-```{r LoadAndWrangleOtherDatasets}
+```{r LoadAndWrangleOtherDatasets, message=FALSE, warning=FALSE}
 #Health Boards
 HBCodes <- read_csv("https://raw.githubusercontent.com/s1906007/expert-octo-pancake/main/Data/HBCodes.csv")
 
@@ -183,14 +195,7 @@ ReproNum <- sum(ReproActive[["Females"]])
 
 # Contraception Data
 
-```{r ContraceptionData}
-#Tablets
-Tablet <- CompletePrescriptionDataset %>%
-  filter(str_detect(BNFItemCode, "0703010")) %>%
-  filter(str_detect(BNFItemDescription, "TAB"))
-
-Tablet <- bind_rows(Tablet, CompletePrescriptionDataset %>% filter(str_detect(BNFItemCode, "0703021")))
-
+```{r ContraceptionData, message=FALSE, warning=FALSE}
 #Injections
 Injection <- CompletePrescriptionDataset %>% 
   filter(str_detect(BNFItemCode, "0703022M"))
@@ -207,68 +212,35 @@ IUD <- CompletePrescriptionDataset %>%
 Implant <- CompletePrescriptionDataset %>% 
   filter(str_detect(BNFItemDescription, "NEXPLANON"))
 
+#Create Long Acting Reversible Contraception
+LARCList <- list(IUD, IUS, Implant, Injection)
+LARC <- map_df(LARCList, Wrangle)
+
 #Emergency Contraception
 EmergencyContraception <- CompletePrescriptionDataset %>% 
-  filter(str_detect(BNFItemCode, "0703050"))
+  filter(str_detect(BNFItemCode, "0703050")) %>% 
+  Wrangle(.)
 
-#Wrangle Contraceptive Data
-EmergencyContraception <- Wrangle(EmergencyContraception)
-Implant <- Wrangle(Implant)
-Injection <- Wrangle(Injection)
-IUD <- Wrangle(IUD)
-IUS <- Wrangle(IUS)
-Tablet <- Wrangle(Tablet)
+#Tablets
+Tablet <- CompletePrescriptionDataset %>%
+  filter(str_detect(BNFItemCode, "0703010")) %>%
+  filter(str_detect(BNFItemDescription, "TAB"))
 
-#Create Long Acting Reversible Contraception
-LARC <- full_join(Implant, Injection)
-LARC <- full_join(LARC, IUD)
-LARC <- full_join(LARC, IUS)
+Tablet <- bind_rows(Tablet, CompletePrescriptionDataset %>% filter(str_detect(BNFItemCode, "0703021"))) %>%
+  Wrangle(.)
 ```
 
-```{r PlottingLARCData}
-# Plot per Health Board (Panel A)
+```{r PlottingLARCData, warning=FALSE, message=FALSE}
 #Initialise Data for Health Boards
 LARCPlotData <- LARC %>%
   group_by(PaidDateMonth, HealthBoardCode) %>%
-  summarise(SumPaidQuantity = sum(PaidQuantity),
-            .groups = 'drop')
+  summarise(SumPaidQuantity = sum(PaidQuantity), .groups = 'drop')
 
-HealthBoardLabels <-
-  c(
-    "NHS Ayrshire and Arran",
-    "NHS Borders",
-    "NHS Dumfries and Galloway",
-    "NHS Fife",
-    "NHS Forth Valley",
-    "NHS Grampian",
-    "NHS Greater Glasgow and Clyde",
-    "NHS Highland",
-    "NHS Lanarkshire",
-    "NHS Lothian",
-    "NHS Orkney",
-    "NHS Shetland",
-    "NHS Tayside",
-    "NHS Western Isles"
-  )
+HealthBoardLabels <- c("NHS Ayrshire and Arran", "NHS Borders", "NHS Dumfries and Galloway", "NHS Fife", "NHS Forth Valley", "NHS Grampian", "NHS Greater Glasgow and Clyde", "NHS Highland", "NHS Lanarkshire", "NHS Lothian", "NHS Orkney", "NHS Shetland", "NHS Tayside", "NHS Western Isles")
 
-names(HealthBoardLabels) <-
-  c(
-    "AaA",
-    "Bor",
-    "DaG",
-    "Fif",
-    "FoV",
-    "Gra",
-    "GGC",
-    "Hig",
-    "Lan",
-    "Lot",
-    "Ork",
-    "She",
-    "Tay",
-    "WIs"
-  )
-#Building the plot
+names(HealthBoardLabels) <- c("AaA", "Bor", "DaG", "Fif", "FoV", "Gra", "GGC", "Hig", "Lan", "Lot", "Ork", "She", "Tay", "WIs")
+
+#lot per Health Board (Panel A)
 LARCPlot <- LARCPlotData %>%
   ggplot(aes(x = PaidDateMonth, y = SumPaidQuantity)) +
   annotate(geom = "rect",
@@ -276,31 +248,28 @@ LARCPlot <- LARCPlotData %>%
     xmax = c(dmy("19/07/2020"), dmy("16/04/2021"), dmy("21/03/2022")),
     ymin = c(-Inf, -Inf, -Inf),
     ymax = c(Inf, Inf, Inf),
-  fill = "yellow",
-  alpha = 0.25) +
+  fill = "yellow", alpha = 0.25) +
   geom_line(mapping = aes(colour = HealthBoardCode)) +
-  geom_point(mapping = aes(colour = HealthBoardCode),
-             shape = 1) +
+  geom_point(mapping = aes(colour = HealthBoardCode), shape = 1) +
   scale_x_date() +
-  facet_wrap(
-    ~ HealthBoardCode,
-    ncol = 2,
-    scales = "free",
-    labeller = labeller(HealthBoardCode = HealthBoardLabels)
-  ) +
-  theme_minimal() +
   scale_color_discrete_qualitative(palette = "Pastel1") +
-  labs(title = "Long Acting Reversible Contraception Prescriptions \n Issued by NHS Scotland by Health Board", x = "Month and Year Prescription Dispensed", y = "Sum of Prescriptions Issued") +
-  theme(legend.position = "none", plot.title = element_text(hjust = 0.5, face = "bold"), axis.title.x = element_text(face = "bold"), axis.title.y = element_text(face = "bold"), strip.text = element_text(face = "italic"))
-
-#Output = 
-#LARCPlot
+  facet_wrap(~ HealthBoardCode, ncol = 2, scales = "free",
+    labeller = labeller(HealthBoardCode = HealthBoardLabels)) +
+  labs(title = "Long Acting Reversible Contraception Prescriptions 
+                \n Issued by NHS Scotland by Health Board", 
+       x = "Month and Year Prescription Dispensed", 
+       y = "Sum of Prescriptions Issued") +
+  theme_minimal() +
+  theme(legend.position = "none", 
+        plot.title = element_text(hjust = 0.5, face = "bold"), 
+        axis.title.x = element_text(face = "bold"), 
+        axis.title.y = element_text(face = "bold"), 
+        strip.text = element_text(face = "italic"))
 
 #Now to build plot for all of Scotland (Panel B)
 LARCPlotDataScotland <- LARC %>%
   group_by(PaidDateMonth) %>%
-  summarise(SumPaidQuantity = sum(PaidQuantity),
-            .groups = 'drop')
+  summarise(SumPaidQuantity = sum(PaidQuantity), .groups = 'drop')
 
 LARCPlotScotland <- LARCPlotDataScotland %>%
   ggplot(aes(x = PaidDateMonth, y = SumPaidQuantity)) +
@@ -309,24 +278,26 @@ LARCPlotScotland <- LARCPlotDataScotland %>%
     xmax = c(dmy("19/07/2020"), dmy("16/04/2021"), dmy("21/03/2022")),
     ymin = c(-Inf, -Inf, -Inf),
     ymax = c(Inf, Inf, Inf),
-  fill = "yellow",
-  alpha = 0.25) +
+  fill = "yellow", alpha = 0.25) +
   geom_line(colour = "#0391BF") +
-  geom_point(colour = "#0391BF",
-             shape = 1) +
+  geom_point(colour = "#0391BF", shape = 1) +
   scale_x_date() +
+  labs(title = "Long Acting Reversible Contraception Prescriptions 
+                \n Issued by NHS Scotland", 
+       x = "Month and Year Prescription Dispensed", 
+       y = "Sum of Prescriptions Issued") +
   theme_minimal() +
-  labs(title = "Long Acting Reversible Contraception Prescriptions \n Issued by NHS Scotland", x = "Month and Year Prescription Dispensed", y = "Sum of Prescriptions Issued") +
-  theme(legend.position = "none", plot.title = element_text(hjust = 0.5, face = "bold"), axis.title.x = element_text(face = "bold"), axis.title.y = element_text(face = "bold"), strip.text = element_text(face = "italic"))
-#Output = 
-#LARCPlotScotland
+  theme(legend.position = "none", 
+        plot.title = element_text(hjust = 0.5, face = "bold"), 
+        axis.title.x = element_text(face = "bold"), 
+        axis.title.y = element_text(face = "bold"), 
+        strip.text = element_text(face = "italic"))
 
 #Now to build plot for all of Scotland but zoomed in on 2020 to 2022 (Panel C)
 LARCPlotDataScotlandZoomed <- LARC %>%
   group_by(PaidDateMonth) %>%
   filter(as_date(PaidDateMonth) >= as_date("2020-01-01")) %>% 
-  summarise(SumPaidQuantity = sum(PaidQuantity),
-            .groups = 'drop')
+  summarise(SumPaidQuantity = sum(PaidQuantity), .groups = 'drop')
 
 LARCPlotScotlandZoomed <- LARCPlotDataScotlandZoomed %>%
   ggplot(aes(x = PaidDateMonth, y = SumPaidQuantity)) +
@@ -335,125 +306,88 @@ LARCPlotScotlandZoomed <- LARCPlotDataScotlandZoomed %>%
     xmax = c(dmy("19/07/2020"), dmy("16/04/2021"), dmy("21/03/2022")),
     ymin = c(-Inf, -Inf, -Inf),
     ymax = c(Inf, Inf, Inf),
-  fill = "yellow",
-  alpha = 0.25) +
+  fill = "yellow", alpha = 0.25) +
   geom_line(colour = "#0391BF") +
-  geom_point(colour = "#0391BF",
-             shape = 1) +
-  scale_x_date(date_breaks="2 months", date_labels = "%b '%y", minor_breaks = NULL) +
+  geom_point(colour = "#0391BF", shape = 1) +
+  scale_x_date(date_breaks="2 months", 
+               date_labels = "%b '%y", 
+               minor_breaks = NULL) +
+  labs(title = "Long Acting Reversible Contraception Prescriptions 
+                \n Issued by NHS Scotland from Jan 2020 to Jul 2022", 
+       x = "Month and Year Prescription Dispensed", 
+       y = "Sum of Prescriptions Issued") +
   theme_minimal() +
-  labs(title = "Long Acting Reversible Contraception Prescriptions \n Issued by NHS Scotland from Jan 2020 to Jul 2022", x = "Month and Year Prescription Dispensed", y = "Sum of Prescriptions Issued") +
-  theme(legend.position = "none", plot.title = element_text(hjust = 0.5, face = "bold"), axis.title.x = element_text(face = "bold"), axis.title.y = element_text(face = "bold"), strip.text = element_text(face = "italic"), axis.text.x.bottom = element_text(angle = 45, margin = margin(t = 10)))
-#Output = 
-#LARCPlotScotlandZoomed
+  theme(legend.position = "none", 
+        plot.title = element_text(hjust = 0.5, face = "bold"), 
+        axis.title.x = element_text(face = "bold"), 
+        axis.title.y = element_text(face = "bold"), 
+        strip.text = element_text(face = "italic"), 
+        axis.text.x.bottom = element_text(angle = 45, margin = margin(t = 10)))
 
 #Now to put A, B & C together to make one plot with `patchwork`
 LARCPlotsPatchwork <- wrap_plots(LARCPlot, 
-           LARCPlotScotland / LARCPlotScotlandZoomed) +
+                                 LARCPlotScotland / LARCPlotScotlandZoomed) +
   plot_layout(widths = c(2,1)) + 
-  plot_annotation(caption = 'Disclaimer: Scales are free on these plots. \n Yellow shaded areas indicate national lockdowns in Scotland.', tag_levels = 'A', title = "Change in Prescribing Rates of Long Acting Reversible Contraception in Scotland over Covid-19 Lockdowns", theme = theme(plot.title = element_text(hjust = 0.5, face = "bold", size = 18))) & 
-  theme(plot.tag = element_text(face = "bold"), plot.margin = margin(5, 5, 5, 5))
+  plot_annotation(
+    caption = 'Disclaimer: Scales are free on these plots. \n Yellow shaded                   areas indicate national lockdowns in Scotland.', 
+    tag_levels = 'A', 
+    title = "Change in Prescribing Rates of Long Acting Reversible                          Contraception in Scotland over Covid-19 Lockdowns", 
+    theme = theme(
+      plot.title = element_text(hjust = 0.5, face = "bold", size = 18)), 
+      plot.tag = element_text(face = "bold"), 
+      plot.margin = margin(5, 5, 5, 5))
 
 #Output =
 LARCPlotsPatchwork
 ```
 
-```{r}
-LARCTableDataPreCovid <- LARC %>%
-  group_by(PaidDateMonth) %>%
-  summarise(SumPaidQuantity = sum(PaidQuantity),
-            .groups = 'drop') %>%
-  filter(between(PaidDateMonth, as_date("2015-10-01"), as_date("2020-03-22"))) %>%
-  group_by(year(PaidDateMonth)) %>%
-  summarise(MeanPaidQuantity = mean(SumPaidQuantity),
-            .groups = 'drop')
-  
-LARCTableDataLockdown1 <- LARC %>% 
-    group_by(PaidDateMonth) %>%
-  summarise(SumPaidQuantity = sum(PaidQuantity),
-            .groups = 'drop') %>%
-  filter(between(PaidDateMonth, as_date("2020-03-23"), as_date("2020-07-19"))) %>%
-  summarise(MeanPaidQuantity = mean(SumPaidQuantity))
-
-LARCTableDataPostLockdown1 <- LARC %>% 
-    group_by(PaidDateMonth) %>%
-  summarise(SumPaidQuantity = sum(PaidQuantity),
-            .groups = 'drop') %>%
-  filter(between(PaidDateMonth, as_date("2020-07-20"), as_date("2020-12-25"))) %>%
-  summarise(MeanPaidQuantity = mean(SumPaidQuantity))
-
-
-LARCTableDataLockdown2 <- LARC %>% 
-    group_by(PaidDateMonth) %>%
-  summarise(SumPaidQuantity = sum(PaidQuantity),
-            .groups = 'drop') %>%
-  filter(between(PaidDateMonth, as_date("2020-12-26"), as_date("2021-04-16"))) %>%
-  summarise(MeanPaidQuantity = mean(SumPaidQuantity))
-
-LARCTableDataPostLockdown2 <- LARC %>% 
-    group_by(PaidDateMonth) %>%
-  summarise(SumPaidQuantity = sum(PaidQuantity),
-            .groups = 'drop') %>%
-  filter(between(PaidDateMonth, as_date("2021-04-17"), as_date("2021-12-25"))) %>%
-  summarise(MeanPaidQuantity = mean(SumPaidQuantity))
-
-LARCTableDataLockdown3 <- LARC %>% 
-    group_by(PaidDateMonth) %>%
-  summarise(SumPaidQuantity = sum(PaidQuantity),
-            .groups = 'drop') %>%
-  filter(between(PaidDateMonth, as_date("2021-12-26"), as_date("2022-03-21"))) %>%
-  summarise(MeanPaidQuantity = mean(SumPaidQuantity))
-
-LARCTableDataPostLockdown3 <- LARC %>% 
-    group_by(PaidDateMonth) %>%
-  summarise(SumPaidQuantity = sum(PaidQuantity),
-            .groups = 'drop') %>%
-  filter(between(PaidDateMonth, as_date("2022-03-22"), as_date("2022-07-01"))) %>%
-  summarise(MeanPaidQuantity = mean(SumPaidQuantity))
-
-LARCTableDataPreCovid <- LARCTableDataPreCovid %>% 
-  mutate(TimePeriod = `year(PaidDateMonth)`) %>% 
-  select(-`year(PaidDateMonth)`)
-
-LARCTableDataLockdown1 <- LARCTableDataLockdown1 %>% 
-  mutate(TimePeriod = c("Lockdown 1"))
-
-LARCTableDataPostLockdown1 <- LARCTableDataPostLockdown1 %>% 
-  mutate(TimePeriod = c("Post-Lockdown 1"))
-  
-LARCTableDataLockdown2 <- LARCTableDataLockdown2 %>% 
-  mutate(TimePeriod = c("Lockdown 2"))
-
-LARCTableDataPostLockdown2 <- LARCTableDataPostLockdown2 %>% 
-  mutate(TimePeriod = c("Post-Lockdown 2"))
-
-LARCTableDataLockdown3 <- LARCTableDataLockdown3 %>% 
-  mutate(TimePeriod = c("Lockdown 3"))
-
-LARCTableDataPostLockdown3 <- LARCTableDataPostLockdown3 %>% 
-  mutate(TimePeriod = c("Post-Lockdown 3"))
-
-LARCTableDataPreCovid <- LARCTableDataPreCovid %>% 
-  mutate(TimePeriod = as.character(TimePeriod))
-
-LARCTableData <- bind_rows(LARCTableDataPreCovid, LARCTableDataLockdown1, LARCTableDataPostLockdown1, LARCTableDataLockdown2, LARCTableDataPostLockdown2, LARCTableDataLockdown3, LARCTableDataPostLockdown3)
-
-rm(LARCTableDataPreCovid, LARCTableDataLockdown1, LARCTableDataPostLockdown1, LARCTableDataLockdown2, LARCTableDataPostLockdown2, LARCTableDataLockdown3, LARCTableDataPostLockdown3)
-
-LARCTableData %>% 
-  gt()
-```
-
-```{r}
-LARCTable <- LARC %>%
-  group_by(PaidDateMonth) %>%
-  summarise(SumPaidQuantity = sum(PaidQuantity),
-            .groups = 'drop') %>%
-  filter(between(PaidDateMonth, as_date("2020-03-23"), as_date("2020-07-19"))) %>%
-  summarise(MeanPaidQuantity = mean(SumPaidQuantity),
-            .groups = 'drop') %>%
-  group_by(PaidDateMonth) %>%
-  summarise(SumPaidQuantity = sum(PaidQuantity),
-            .groups = 'drop') %>%
-  gt()
+```{r LARCTableTimePeriodsMVP}
+LARC %>%
+  select(PaidDateMonth, PaidQuantity, HealthBoardCode) %>%
+  group_by(PaidDateMonth) %>% 
+  summarise(SumPaidQuantity = sum(PaidQuantity), NumberHealthBoards = n_distinct(HealthBoardCode), NumberMonths = n_distinct(PaidDateMonth), .groups = 'drop') %>% 
+  mutate(TimePeriod = case_when(
+    PaidDateMonth < as_date("2020-03-22") ~ "Pre-Covid", 
+    between(PaidDateMonth, as_date("2020-03-2"), as_date("2020-07-19")) ~ "Lockdown 1",
+    between(PaidDateMonth, as_date("2020-07-20"), as_date("2020-12-25")) ~
+      "Post-Lockdown 1",
+    between(PaidDateMonth, as_date("2020-12-26"), as_date("2021-04-16")) ~
+      "Lockdown 2",
+    between(PaidDateMonth, as_date("2021-04-17"), as_date("2021-12-25")) ~
+      "Post-Lockdown 2",
+    between(PaidDateMonth, as_date("2021-12-26"), as_date("2022-03-21")) ~
+      "Lockdown 3",
+    PaidDateMonth > as_date("2022-03-22") ~ "Post-Lockdown 3"
+    )) %>% 
+  mutate(TimePeriodDates = case_when(
+    TimePeriod == "Pre-Covid" ~ "01/10/2015 - 22/03/2020",
+    TimePeriod == "Lockdown 1" ~ "23/03/2020 - 19/07/2020",
+    TimePeriod == "Post-Lockdown 1" ~ "20/07/2020 - 25/12/2020",
+    TimePeriod == "Lockdown 2" ~ "26/12/2020 - 16/04/2021",
+    TimePeriod == "Post-Lockdown 2" ~ "17/04/2021 - 25/12/2021",
+    TimePeriod == "Lockdown 3" ~ "26/12/2021 - 21/03/2022",
+    TimePeriod == "Post-Lockdown 3" ~ "22/03/2022 - 01/07/2022"
+    )) %>% 
+    mutate(MeanPrescriptionsDispensedPerHealthBoardPerMonth = ((SumPaidQuantity/NumberHealthBoards)/NumberMonths)) %>% 
+  group_by(TimePeriod) %>% 
+    mutate(MeanPrescriptionsDispensedPerHealthBoardPerTimePeriod = (mean(MeanPrescriptionsDispensedPerHealthBoardPerMonth))) %>% 
+  select(TimePeriod, MeanPrescriptionsDispensedPerHealthBoardPerTimePeriod, TimePeriodDates) %>%
+  distinct(TimePeriod, TimePeriodDates, MeanPrescriptionsDispensedPerHealthBoardPerTimePeriod) %>% 
+  tibble() %>% 
+  mutate(PercentageChange = round(100 - ((MeanPrescriptionsDispensedPerHealthBoardPerTimePeriod/lag(MeanPrescriptionsDispensedPerHealthBoardPerTimePeriod) *100)), 0)) %>% 
+  mutate(PercentageChange = case_when(
+    PercentageChange > 0 ~ paste0("+", PercentageChange, "%", " ↑"),
+    PercentageChange < 0 ~ paste0( PercentageChange, "%", " ↓"))) %>% 
+  gt() %>% 
+  tab_header(title = "Mean Quantities of Long Acting Reversible Contraception Dispensed by NHS Scotland") %>% 
+  fmt_integer(MeanPrescriptionsDispensedPerHealthBoardPerTimePeriod) %>%
+  cols_label(TimePeriod = "Time Period", TimePeriodDates = "Dates", MeanPrescriptionsDispensedPerHealthBoardPerTimePeriod = "Mean LARC Prescriptions Dispensed") %>% 
+  cols_move_to_end(MeanPrescriptionsDispensedPerHealthBoardPerTimePeriod) %>%
+  gt_theme_guardian() %>% 
+  tab_style(style = list(cell_fill(color = "yellow", alpha = 0.3)),
+    locations = cells_body(columns = everything(), rows = c(2,4,6))) %>% 
+  tab_style(style = list(cell_text(color = "green")),
+    locations = cells_body(columns = PercentageChange, rows = c(2, 7))) %>% 
+    tab_style(style = list(cell_text(color = "red")),
+    locations = cells_body(columns = PercentageChange, rows = c(3, 4, 5, 6)))
 ```
