@@ -215,8 +215,7 @@ LARCPlotScotlandZoomed <- Zoom(LARC)%>%
        y = "Sum of Prescriptions Issued") +
   ThemeElliot()
 #Now to put Panels A, B & C together to make one plot with `patchwork`
-LARCPlotsPatchwork <- wrap_plots(LARCPlot, 
-                                 LARCPlotScotland / LARCPlotScotlandZoomed) +
+LARCPlotsPatchwork <- wrap_plots(LARCPlot, LARCPlotScotland / LARCPlotScotlandZoomed) +
   plot_layout(widths = c(2,1)) + 
   plot_annotation(
     caption = 'N.B. Scales are free on these plots. For Panel A, Health Boards began reporting at different times hence data is missing for some years in some plots. Yellow shaded areas indicate national lockdowns in Scotland.',
@@ -276,7 +275,7 @@ LARC %>%
     locations = cells_body(columns = PercentageChange, rows = c(3, 4, 5, 6)))
 ```
 
-```{r ZoomedPlots}
+```{r ZoomedPlots, warning=FALSE}
 ContraceptivesLogPlot <- Zoom(EmergencyContraception) %>%
   ggplot(aes(x = PaidDateMonth, y = SumPaidQuantity)) +
    annotate(geom = "rect",
@@ -348,8 +347,20 @@ TabletZoomPlot <- Zoom(Tablet) %>%
        y = "Sum of Prescriptions Issued") +
     ThemeElliot()
 
-ZoomedPlots <- wrap_plots(ContraceptivesLogPlot, LARCZoomPlot/TabletZoomPlot/EmergencyContraceptionZoomPlot)
+ZoomedPlots <- wrap_plots(ContraceptivesLogPlot, LARCZoomPlot/TabletZoomPlot/EmergencyContraceptionZoomPlot) +
+plot_layout(widths = c(1,2)) + 
+  plot_annotation(
+    caption = 'N.B. Scales are free on these plots. Yellow shaded areas indicate national lockdowns in Scotland. Green shaded areas indicate the month after the preceding lockdowns were lifted.',
+ tag_levels = 'A',
+    title = "Change in Prescribing Rates of Different Types of Contraception in Scotland over Covid-19 Lockdowns",
+ theme = theme(plot.title = element_text(hjust = 0.5, face = "bold", size = 18), plot.margin = margin(5, 5, 5, 5)))
+
 ZoomedPlots
+
+#Need to annotate lines on Log Graph and change colours of B-D to match
 ```
 
+```{r}
+
+```
 
