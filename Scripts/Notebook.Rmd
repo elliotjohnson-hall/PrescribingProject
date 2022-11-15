@@ -13,7 +13,7 @@ knitr::opts_chunk$set(echo = TRUE)
 
 ```{r LoadLibraries, message=FALSE, warning=FALSE}
 if(!require(pacman))install.packages("pacman")
-pacman::p_load("gtExtras", "tidyverse", "lubridate", "readxl", "ggplot2", "gt", "here", "colorspace", "patchwork")
+pacman::p_load("gtExtras", "tidyverse", "lubridate", "readxl", "ggplot2", "gt", "here", "colorspace", "patchwork", "scales")
 ```
 
 # Data Import and Wrangle
@@ -55,6 +55,19 @@ AnnotateLockdowns <- function(Plot) {
     ymax = c(Inf, Inf, Inf),
   fill = "yellow", alpha = 0.25) }
 
+#Highlights periods of one month after lockdown lifting
+AnnotateFreeMonth <- function(Plot) {
+  annotate(
+    geom = "rect",
+    xmin = c(dmy("19/07/2020"), dmy("16/04/2021"), dmy("21/03/2022")),
+    xmax = c(dmy("19/08/2020"), dmy("16/05/2021"), dmy("21/04/2022")),
+    ymin = c(-Inf,-Inf,-Inf),
+    ymax = c(Inf, Inf, Inf),
+    fill = "green",
+    alpha = 0.25
+  )
+}
+
 #Custom ggplot theme
 ThemeElliot <- function(Plot) {
   theme_minimal(base_size=12, base_family="Avenir") +
@@ -69,6 +82,33 @@ ThemeElliot <- function(Plot) {
       axis.text.x.bottom = 
         element_text(angle = 45, margin = margin(t = 10)),
     plot.margin = margin(5, 5, 5, 5))}
+
+SIMDPopulationLookup <- function(Dataset, SIMDRank) {
+  Dataset %>%
+    filter(SIMDOverallRank == SIMDRank) %>%
+    distinct(Population) %>%
+    summarise((sum(Population)) * Proportion)
+}
+
+SIMDContraceptionLookup <- function(Dataset, SIMDRank) {
+Dataset %>% 
+  filter(SIMDOverallRank == SIMDRank) %>% 
+  mutate(NumberHealthBoards = n_distinct(HealthBoardCode)) %>% 
+  select(c(NumberHealthBoards, PaidQuantity, PaidDateMonth)) %>%
+  group_by(PaidDateMonth) %>% 
+  mutate(ContraceptionPerHeadPerMonthPerHealthBoard = as.numeric((PaidQuantity/NumberHealthBoards)/SIMDPopulationLookup(Dataset, SIMDRank))) 
+  }
+  
+SIMDPlot <- function(Dataset) {
+  Dataset %>% 
+  group_by(PaidDateMonth) %>%
+  ggplot(aes(x = PaidDateMonth, y = ContraceptionPerHeadPerMonthPerHealthBoard)) +
+  geom_line() +
+  AnnotateLockdowns() +
+  AnnotateFreeMonth() +
+  ThemeElliot()
+}
+
 ```
 
 ## Prescriptions in the Community Data
@@ -134,6 +174,7 @@ ReproActive <- AgeBySex %>%
   select(Age, Females) %>%
   filter(between(Age, 16, 49))
 ReproNum <- sum(ReproActive[["Females"]])
+Proportion <- ReproNum/5295403
 ```
 
 # Contraception Data
@@ -311,6 +352,7 @@ ContraceptivesLogPlot <- Zoom(EmergencyContraception) %>%
 LARCZoomPlot <- Zoom(LARC) %>%
   ggplot(aes(x = PaidDateMonth, y = SumPaidQuantity)) +
   AnnotateLockdowns() +
+  AnnotateFreeMonth() +
   geom_line(colour = "#0391BF") +
   geom_point(colour = "#0391BF", shape = 1) +
   scale_x_date(date_breaks="2 months", 
@@ -324,6 +366,7 @@ LARCZoomPlot <- Zoom(LARC) %>%
 EmergencyContraceptionZoomPlot <- Zoom(EmergencyContraception) %>%
   ggplot(aes(x = PaidDateMonth, y = SumPaidQuantity)) +
   AnnotateLockdowns() +
+  AnnotateFreeMonth() +
   geom_line(colour = "#0391BF") +
   geom_point(colour = "#0391BF", shape = 1) +
   scale_x_date(date_breaks = "2 months", date_labels = "%b '%y", minor_breaks = NULL) +
@@ -336,6 +379,7 @@ EmergencyContraceptionZoomPlot <- Zoom(EmergencyContraception) %>%
 TabletZoomPlot <- Zoom(Tablet) %>% 
   ggplot(aes(x = PaidDateMonth, y = SumPaidQuantity)) +
   AnnotateLockdowns() +
+  AnnotateFreeMonth() +
   geom_line(colour = "#0391BF") +
   geom_point(colour = "#0391BF", shape = 1) +
   scale_y_continuous() +
@@ -361,6 +405,28 @@ ZoomedPlots
 ```
 
 ```{r}
+TabletDeprivationPlot <- SIMDPlot(SIMDContraceptionLookup(Tablet, 20)) +
+  labs(title = "1&20 Tab") +
+  scale_y_continuous(labels = label_percent(), sec.axis = sec_axis(~ . / 100, labels = label_percent(), name = derive())) +
+  geom_line(data = SIMDContraceptionLookup(EmergencyContraception, 20), mapping = aes(y = ContraceptionPerHeadPerMonthPerHealthBoard * 100), colour = "red")
+  
+LARCDeprivationPlot <- SIMDPlot(SIMDContraceptionLookup(LARC, 1)) +
+  labs(title = "1&20 LARC") +
+  scale_y_continuous(labels = label_percent()) +
+    geom_line(data = SIMDContraceptionLookup(EmergencyContraception, 20), colour = "red")
 
+EmergencyContraceptionDeprivationPlot <- SIMDPlot(SIMDContraceptionLookup(EmergencyContraception, 1)) +
+  labs(title = "1&20 EC") +
+  scale_y_continuous(labels = label_percent()) +
+  geom_line(data = SIMDContraceptionLookup(EmergencyContraception, 20), colour = "red")
+
+DeprivationPlots <- wrap_plots(TabletDeprivationPlot/ LARCDeprivationPlot,EmergencyContraceptionDeprivationPlot) +
+  plot_annotation(
+    caption = 'N.B. Scales on Plot A are different by a factor of 100! Yellow shaded areas indicate national lockdowns in Scotland. Green shaded areas indicate the month after the preceding lockdowns were lifted.',
+ tag_levels = 'A',
+    title = "Change in Prescribing Rates of Different Types of Contraception in Scotland over Covid-19 Lockdowns",
+ theme = theme(plot.title = element_text(hjust = 0.5, face = "bold", size = 18), plot.margin = margin(5, 5, 5, 5)))
+#1 = most deprived, 20 = least
+DeprivationPlots
 ```
 
