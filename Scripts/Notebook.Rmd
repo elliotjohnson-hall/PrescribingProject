@@ -1,21 +1,31 @@
 ---
-author: "Elliot Johnson-Hall"
-date: "November 2022"
+author: Elliot Johnson-Hall
+date: '`r format(Sys.Date())`'
 title: "Contraception and Covid-19 Restrictions in Scotland"
+geometry: margin=0.5in
+header-includes:
+   - \usepackage{helvet}
+   - \usepackage[T1]{fontenc}
+mainfont: Helvetica
 output:
   pdf_document:
-      includes:
-          in_header: header.tex 
+    latex_engine: xelatex
+    keep_md: true
+    fig_width: 10.0
+    #fig_height: 
+    includes:
+        in_header: header.tex
 ---
 # Setup Chunks
 
 ```{r Setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE, tidy.opts = list(width.cutoff = 80),tidy = TRUE, error = TRUE)
+knitr::opts_chunk$set(echo = TRUE, tidy.opts = list(width.cutoff = 100), tidy = TRUE, error = TRUE, dev="cairo_pdf")
 ```
 
 ```{r LoadLibraries, message=FALSE, warning=FALSE}
 if(!require(pacman))install.packages("pacman")
-pacman::p_load("gtExtras", "tidyverse", "lubridate", "readxl", "ggplot2", "gt", "here", "colorspace", "patchwork", "scales", "extrafont")
+pacman::p_load("gtExtras", "tidyverse", "lubridate", "readxl", "ggplot2",
+               "gt", "here", "colorspace", "patchwork", "scales", "formatR")
 ```
 
 # Data Import and Wrangle
@@ -24,8 +34,8 @@ pacman::p_load("gtExtras", "tidyverse", "lubridate", "readxl", "ggplot2", "gt", 
 
 ```{r CustomFunctions}
 #This function will perform an analysis pipeline on the data in a DRY way.
-Wrangle <- function(DatasetToWrangle)
-{DatasetToWrangle <- DatasetToWrangle %>%
+Wrangle <- function(DatasetToWrangle) {
+  DatasetToWrangle <- DatasetToWrangle %>%
     filter(GPPractice %in% GPPractices$GPPractice) %>%
     mutate(HB = case_when(is.na(HBT) ~ HBT2014, !is.na(HBT) ~ HBT)) %>%
     select(-c(HBT2014, HBT, ClassOfPreparationCode, NumberOfPaidItems, GrossIngredientCost))
@@ -43,10 +53,12 @@ Wrangle <- function(DatasetToWrangle)
   }
 
 #This zooms in on dates around lockdowns for plotting
-Zoom <- function(DatasetToZoom) {DatasetToZoom %>%
+Zoom <- function(DatasetToZoom) {
+  DatasetToZoom %>%
   group_by(PaidDateMonth) %>%
   filter(as_date(PaidDateMonth) >= as_date("2020-01-01")) %>% 
-  summarise(SumPaidQuantity = sum(PaidQuantity), .groups = 'drop')}
+  summarise(SumPaidQuantity = sum(PaidQuantity), .groups = 'drop')
+  }
 
 #Highlights periods of lockdown
 AnnotateLockdowns <- function(Plot) {
@@ -55,7 +67,8 @@ AnnotateLockdowns <- function(Plot) {
     xmax = c(dmy("19/07/2020"), dmy("16/04/2021"), dmy("21/03/2022")),
     ymin = c(-Inf, -Inf, -Inf),
     ymax = c(Inf, Inf, Inf),
-  fill = "yellow", alpha = 0.25) }
+  fill = "yellow", alpha = 0.25) 
+  }
 
 #Highlights periods of one month after lockdown lifting
 AnnotateFreeMonth <- function(Plot) {
@@ -72,15 +85,15 @@ AnnotateFreeMonth <- function(Plot) {
 
 #Custom ggplot theme
 ThemeElliot <- function(Plot) {
-  theme_minimal(base_size=12) +
+  theme_minimal(base_size=10) %+replace%
     theme(
       legend.position = "none",
-      plot.title = element_text(hjust = 0.5, face = "bold", size = 18),
+      plot.title = element_text(hjust = 0.5, face = "bold", size = 14, margin = margin(0, 0, 5, 0)),
       panel.grid.minor.y=element_blank(),
-      axis.title.x = element_text(face = "bold"),
-      axis.title.y = element_text(face = "bold", angle = 90, margin = margin(r = 5)),
+      axis.title.y = element_text(angle = 90, margin = margin(r = 5)),
       axis.text.y = element_text(angle = 45),
       strip.text = element_text(face = "italic"),
+      axis.title.y.right = element_text(angle = 90),
       axis.text.x.bottom = 
         element_text(angle = 45, margin = margin(t = 10)),
     plot.margin = margin(5, 5, 5, 5))
@@ -244,9 +257,12 @@ LARCPlotScotland <- LARC %>%
   mutate(MeanPrescriptionsDispensedPerHealthBoard = (SumPaidQuantity/NumberHealthBoards)) %>% 
   ggplot(aes(x = PaidDateMonth, y = SumPaidQuantity)) +
   AnnotateLockdowns() +
-  geom_col(aes(y = MeanPrescriptionsDispensedPerHealthBoard * ScaleFactor, fill =  NumberHealthBoards)) +
-  scale_y_continuous(sec.axis = sec_axis(~ . / ScaleFactor)) +
-  geom_col(aes(y = NumberHealthBoards)) +
+  geom_col(aes(y = MeanPrescriptionsDispensedPerHealthBoard * ScaleFactor, fill =  NumberHealthBoards), width = 41, position = position_identity()) +
+annotate("text", x = as_date("2017-01-01"), y = 3000, label = "10", colour = "white") +
+  annotate("text", x = as_date("2018-09-01"), y = 3000, label = "12", colour = "white") +
+  annotate("text", x = as_date("2021-01-01"), y = 3000, label = "14", colour = "white") +
+  scale_y_continuous(sec.axis = sec_axis(~ . / ScaleFactor, name = "Mean LARC Prescriptions Dispensed per Month \n Adjusted for Number of Health Boards")) +
+  scale_fill_fermenter(palette = "Dark2") +
   geom_line(colour = "#0391BF") +
   geom_point(colour = "#0391BF", shape = 1) +
   #scale_x_date() +
@@ -271,7 +287,7 @@ LARCPlotScotlandZoomed <- Zoom(LARC)%>%
 LARCPlotsPatchwork <- wrap_plots(LARCPlot, LARCPlotScotland / LARCPlotScotlandZoomed) +
   plot_layout(widths = c(2,1)) + 
   plot_annotation(
-    caption = 'N.B. Scales are free on these plots. For Panel A, Health Boards began reporting at different times hence data is missing for some years in some plots. Yellow shaded areas indicate national lockdowns in Scotland.',
+    caption = "N.B. Scales are free on these plots. \n For Panel A, Health Boards began reporting at different times hence data is missing for some years in some plots. \n Yellow shaded areas indicate national lockdowns in Scotland. \n For Panel B, numbers indicate the number of Health Boards reporting at the time shown.",
  tag_levels = 'A',
     title = "Change in Prescribing Rates of Long Acting Reversible \n Contraception in Scotland over Covid-19 Lockdowns",
  theme = theme(plot.title = element_text(hjust = 0.5, face = "bold", size = 18), plot.margin = margin(5, 5, 5, 5)))
@@ -283,53 +299,110 @@ LARCPlotsPatchwork
 ```
 \stoplandscape
 \newpage
+```{r}
+TableWrangle <- function(Dataset) {
+  Dataset %>%
+    select(PaidDateMonth, PaidQuantity, HealthBoardCode) %>%
+    group_by(PaidDateMonth) %>%
+    summarise(
+      SumPaidQuantity = sum(PaidQuantity),
+      NumberHealthBoards = n_distinct(HealthBoardCode),
+      NumberMonths = n_distinct(PaidDateMonth),
+      .groups = 'drop'
+    ) %>%
+    mutate(
+      TimePeriod = case_when(
+        PaidDateMonth < as_date("2020-03-22") ~ "Pre-Covid",
+        between(PaidDateMonth, as_date("2020-03-2"), as_date("2020-07-19")) ~ "Lockdown 1",
+        between(
+          PaidDateMonth,
+          as_date("2020-07-20"),
+          as_date("2020-12-25")
+        ) ~
+          "Post-Lockdown 1",
+        between(
+          PaidDateMonth,
+          as_date("2020-12-26"),
+          as_date("2021-04-16")
+        ) ~
+          "Lockdown 2",
+        between(
+          PaidDateMonth,
+          as_date("2021-04-17"),
+          as_date("2021-12-25")
+        ) ~
+          "Post-Lockdown 2",
+        between(
+          PaidDateMonth,
+          as_date("2021-12-26"),
+          as_date("2022-03-21")
+        ) ~
+          "Lockdown 3",
+        PaidDateMonth > as_date("2022-03-22") ~ "Post-Lockdown 3"
+      )
+    ) %>%
+    mutate(
+      TimePeriodDates = case_when(
+        TimePeriod == "Pre-Covid" ~ "01/10/2015 - 22/03/2020",
+        TimePeriod == "Lockdown 1" ~ "23/03/2020 - 19/07/2020",
+        TimePeriod == "Post-Lockdown 1" ~ "20/07/2020 - 25/12/2020",
+        TimePeriod == "Lockdown 2" ~ "26/12/2020 - 16/04/2021",
+        TimePeriod == "Post-Lockdown 2" ~ "17/04/2021 - 25/12/2021",
+        TimePeriod == "Lockdown 3" ~ "26/12/2021 - 21/03/2022",
+        TimePeriod == "Post-Lockdown 3" ~ "22/03/2022 - 01/07/2022"
+      )
+    ) %>%
+    mutate(MeanPrescriptionsDispensedPerHealthBoardPerMonth = ((SumPaidQuantity /
+                                                                  NumberHealthBoards) / NumberMonths)) %>%
+    group_by(TimePeriod) %>%
+    mutate(MeanPrescriptionsDispensedPerHealthBoardPerTimePeriod = (mean(
+      MeanPrescriptionsDispensedPerHealthBoardPerMonth
+    ))) %>%
+    select(
+      TimePeriod,
+      MeanPrescriptionsDispensedPerHealthBoardPerTimePeriod,
+      TimePeriodDates
+    ) %>%
+    distinct(
+      TimePeriod,
+      TimePeriodDates,
+      MeanPrescriptionsDispensedPerHealthBoardPerTimePeriod
+    ) %>%
+    tibble() %>%
+    mutate(PercentageChange = round(((
+      MeanPrescriptionsDispensedPerHealthBoardPerTimePeriod / lag(MeanPrescriptionsDispensedPerHealthBoardPerTimePeriod) *
+        100
+    ) - 100
+    ), 1)) %>%
+    mutate(PercentageChangePretty = case_when(
+      PercentageChange > 0 ~ paste0("+", PercentageChange, "%", " ↑"),
+      PercentageChange < 0 ~ paste0(PercentageChange, "%", " ↓")
+    ))
+}
+```
+
+
 ```{r LARCTableTimePeriods}
-LARC %>%
-  select(PaidDateMonth, PaidQuantity, HealthBoardCode) %>%
-  group_by(PaidDateMonth) %>% 
-  summarise(SumPaidQuantity = sum(PaidQuantity), NumberHealthBoards = n_distinct(HealthBoardCode), NumberMonths = n_distinct(PaidDateMonth), .groups = 'drop') %>% 
-  mutate(TimePeriod = case_when(
-    PaidDateMonth < as_date("2020-03-22") ~ "Pre-Covid", 
-    between(PaidDateMonth, as_date("2020-03-2"), as_date("2020-07-19")) ~ "Lockdown 1",
-    between(PaidDateMonth, as_date("2020-07-20"), as_date("2020-12-25")) ~
-      "Post-Lockdown 1",
-    between(PaidDateMonth, as_date("2020-12-26"), as_date("2021-04-16")) ~
-      "Lockdown 2",
-    between(PaidDateMonth, as_date("2021-04-17"), as_date("2021-12-25")) ~
-      "Post-Lockdown 2",
-    between(PaidDateMonth, as_date("2021-12-26"), as_date("2022-03-21")) ~
-      "Lockdown 3",
-    PaidDateMonth > as_date("2022-03-22") ~ "Post-Lockdown 3"
-    )) %>% 
-  mutate(TimePeriodDates = case_when(
-    TimePeriod == "Pre-Covid" ~ "01/10/2015 - 22/03/2020",
-    TimePeriod == "Lockdown 1" ~ "23/03/2020 - 19/07/2020",
-    TimePeriod == "Post-Lockdown 1" ~ "20/07/2020 - 25/12/2020",
-    TimePeriod == "Lockdown 2" ~ "26/12/2020 - 16/04/2021",
-    TimePeriod == "Post-Lockdown 2" ~ "17/04/2021 - 25/12/2021",
-    TimePeriod == "Lockdown 3" ~ "26/12/2021 - 21/03/2022",
-    TimePeriod == "Post-Lockdown 3" ~ "22/03/2022 - 01/07/2022"
-    )) %>% 
-    mutate(MeanPrescriptionsDispensedPerHealthBoardPerMonth = ((SumPaidQuantity/NumberHealthBoards)/NumberMonths)) %>% 
-  group_by(TimePeriod) %>% 
-    mutate(MeanPrescriptionsDispensedPerHealthBoardPerTimePeriod = (mean(MeanPrescriptionsDispensedPerHealthBoardPerMonth))) %>% 
-  select(TimePeriod, MeanPrescriptionsDispensedPerHealthBoardPerTimePeriod, TimePeriodDates) %>%
-  distinct(TimePeriod, TimePeriodDates, MeanPrescriptionsDispensedPerHealthBoardPerTimePeriod) %>% 
-  tibble() %>% 
-  mutate(PercentageChange = round(((MeanPrescriptionsDispensedPerHealthBoardPerTimePeriod/lag(MeanPrescriptionsDispensedPerHealthBoardPerTimePeriod) *100) -100), 0)) %>% 
-  mutate(PercentageChange = case_when(
-    PercentageChange > 0 ~ paste0("+", PercentageChange, "%", " ↑"),
-    PercentageChange < 0 ~ paste0( PercentageChange, "%", " ↓"))) %>% 
+TableData <- bind_rows(TableWrangle(LARC), TableWrangle(Tablet), TableWrangle(EmergencyContraception))
+TableData%>% 
   gt() %>% 
-  tab_header(title = "Mean Quantities of Long Acting Reversible Contraception Dispensed by NHS Scotland") %>% 
+  cols_hide(PercentageChange) %>% 
+  tab_header(title = "Mean Quantities of Contraception Dispensed by NHS Scotland", subtitle = "Between October 2015 and July 2022") %>% 
   fmt_integer(MeanPrescriptionsDispensedPerHealthBoardPerTimePeriod) %>%
-  cols_label(TimePeriod = "Time Period", TimePeriodDates = "Dates", MeanPrescriptionsDispensedPerHealthBoardPerTimePeriod = "Mean LARC \n Prescriptions Dispensed", PercentageChange = "Percentage Change") %>% 
-  cols_move(PercentageChange, after = MeanPrescriptionsDispensedPerHealthBoardPerTimePeriod) %>%  cols_move(TimePeriodDates, after = TimePeriod) %>%
-  gt_theme_guardian() %>% 
+  cols_label(TimePeriod = "Time Period", TimePeriodDates = "Dates", MeanPrescriptionsDispensedPerHealthBoardPerTimePeriod = "Prescriptions Dispensed", PercentageChange = "Percentage Change") %>% 
+  tab_row_group(label = "LARC", rows = 1:7) %>% 
+  tab_row_group(label = "Oral", rows = 8:14) %>% 
+  tab_row_group(label = "EC", rows = 15:21) %>% 
+    cols_move(PercentageChangePretty, after = MeanPrescriptionsDispensedPerHealthBoardPerTimePeriod) %>%  cols_move(TimePeriodDates, after = TimePeriod) %>%
   tab_style(style = list(cell_text(color = "red")),
-    locations = cells_body(columns = PercentageChange, rows = c(2, 7))) %>% 
+    locations = cells_body(columns = PercentageChangePretty, rows = PercentageChange < 0)) %>% 
     tab_style(style = list(cell_text(color = "chartreuse4")),
-    locations = cells_body(columns = PercentageChange, rows = c(3, 4, 5, 6)))
+    locations = cells_body(columns = PercentageChangePretty, rows = PercentageChange > 0)) %>% 
+  tab_style(locations = cells_column_labels(), style = list(cell_text(align = "center"))) %>% 
+  gt_theme_538() %>% 
+  tab_options(heading.align = "center", row_group.font.weight = "bold", row_group.background.color = "turquoise", row.striping.background_color = "grey90", column_labels.border.bottom.width = 0) %>% 
+  opt_row_striping() %>% 
+  cols_align(align = "center", columns = c(PercentageChangePretty, MeanPrescriptionsDispensedPerHealthBoardPerTimePeriod))
 ```
 
 ```{r ZoomedPlotting, warning=FALSE}
