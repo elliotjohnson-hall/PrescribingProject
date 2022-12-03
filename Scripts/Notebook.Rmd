@@ -2,6 +2,7 @@
 title: "Contraception and Covid-19 Restrictions in Scotland"
 geometry: margin=0.5in
 fontsize: 10pt
+urlcolor: blue
 output:
   pdf_document:
     latex_engine: xelatex
@@ -16,13 +17,14 @@ knitr::opts_chunk$set(echo = TRUE, error = TRUE, dev="cairo_pdf")
 # Introduction
 
 In England, [a recent
-article](https://doi.org/10.1186/s40834-022-00169-w) revealed changes in
-prescribing of contraception between 2019 and 2020 on account of the
-SARS-CoV-2 pandemic, and associated restrictions. I will examine if this
-is the case in Scotland too.
+article](https://doi.org/10.1186/s40834-022-00169-w){style="color: blue;"}
+revealed changes in prescribing of contraception between 2019 and 2020
+on account of the SARS-CoV-2 pandemic, and associated restrictions. I
+will examine if this is the case in Scotland too.
 
-I have divided contraceptive prescriptions into three classes: LARC,
-oral, and emergency contraception.
+I have divided contraceptive prescriptions into three classes:
+long-acting reversible contraception (LARC), oral (OC), and emergency
+contraception (EC).
 
 | LARC                 | Oral              | Emergency               |
 |----------------------|-------------------|-------------------------|
@@ -42,11 +44,10 @@ oral, and emergency contraception.
     often in GP surgeries of GUM clinics.
 
 I imagine that due to Covid-19 restrictions, there will likely be a
-decrease in prescribing of long-acting reversible contraception (LARC),
-and emergency contraception due to social restrictions. I also imagine
-that an associated uptick in the numbers of oral contraceptive
-prescriptions will be dispensed due to these drugs being prescribed in
-place of LARC.
+decrease in prescribing of LARC, and emergency contraception due to
+social restrictions. I also imagine that an associated uptick in the
+numbers of oral contraceptive prescriptions will be dispensed due to
+these drugs being prescribed in place of LARC.
 
 **Hypothesis 1: in Scotland, as in England, contraceptives prescribed in
 the community changed due to Covid-19 lockdowns.**
@@ -54,9 +55,9 @@ the community changed due to Covid-19 lockdowns.**
 **Hypothesis 2: in Scotland, contraceptives prescribed in the community
 during Covid-19 lockdowns differed by deprivation.**
 
-I will examine these hypotheses using data from the Prescribing in the
-community from NHS Scotland, geospatial data, and the Scottish Index of
-Multiple Deprivation.
+I will examine these hypotheses using data from the *Prescribing in the
+Community Dataset* from NHS Scotland, geospatial data, and the Scottish
+Index of Multiple Deprivation.
 
 # Data Import and Wrangle
 
@@ -211,6 +212,7 @@ of contraception and join them together into a tibble for each of our
 three types of contraception - LARC, Oral, and Emergency.
 
 ```{r ContraceptionData, message=FALSE, warning=FALSE}
+#Extracting contraception data into seperate tibbles from all prescriptions data
 Injection <- CompletePrescriptionDataset %>% 
   filter(str_detect(BNFItemCode, "0703022M"))
 IUS <- CompletePrescriptionDataset %>% 
@@ -236,6 +238,7 @@ percentage change in contraception prescriptions dispensed before and
 during the first lockdown.
 
 ```{r, warning=FALSE, message=FALSE}
+#Wrangling geospatial data and healthboards into one tibble
 SIMDHealthBoards <- left_join(SIMD, HealthBoards)
 PercentageChangeAllContraception <- bind_rows((PercentageChange(LARC) %>%  mutate(Type = "LARC")), (PercentageChange(EmergencyContraception) %>% mutate(Type = "EC")), (PercentageChange(OralContraception) %>% mutate(Type = "OC")) %>% mutate(Type = as.factor(Type)))
 PreLockdownMeanDispensed <- MeanPrescriptionsDispensed(PercentageChangeAllContraception, "2015-10-01", "2020-03-20")
@@ -289,7 +292,7 @@ LARCPlotsPatchwork <- LARCPlot + LARCPlotScotlandZoomed + plot_layout(ncol = 1, 
  theme = theme(plot.title = element_text(hjust = 0.5, face = "bold", size = 18), plot.margin = margin(5, 5, 5, 5)))
 ```
 
-![](images/Rplot02.png){width="67mm"}
+![](images/Rplot02.png){width="103mm"}
 
 In Panel A, we can see that throughout the period before the first
 lockdown in March 2020, there was a variable but fairly consistent rate
@@ -305,28 +308,16 @@ recover than in March 2020.
 
 ## How did contraceptive prescribing change during Lockdown 1?
 
-```{r ContraceptionTimePeriods, warning=FALSE, message=FALSE, eval=FALSE}
+```{r ContraceptionTimePeriodsTable, warning=FALSE, message=FALSE, eval=FALSE}
+#Create tibble of wrangled data
 TableData <- bind_rows(TableWrangle(LARC), TableWrangle(OralContraception), TableWrangle(EmergencyContraception))
-TableData %>%
-  gt() %>%
-  cols_hide(PercentageChange) %>%
-  tab_header(title = "Mean Quantities of Contraception Dispensed by NHS Scotland", subtitle = "Between October 2015 and July 2020") %>%
-  cols_label(TimePeriod = "Time Period", TimePeriodDates = "Dates", PercentageChangePretty = "Percentage Change", MeanPrescriptionsDispensedPerHealthBoardPerTimePeriod = "Mean Prescriptions Dispensed Per Month Per Health Board") %>% 
-  tab_row_group(label = "LARC", rows = 1:2) %>% 
-  tab_row_group(label = "Oral Contraception", rows = 3:4) %>% 
-  tab_row_group(label = "Emergency Contraception", rows = 5:6) %>% 
-  cols_move(TimePeriodDates, after = TimePeriod) %>%
-  fmt_integer(MeanPrescriptionsDispensedPerHealthBoardPerTimePeriod) %>% 
-  tab_style(style = list(cell_text(color = "red")), 
-            locations = cells_body(columns = PercentageChangePretty, 
-                                   rows = PercentageChange < 0)) %>% 
-  tab_style(style = list(cell_text(color = "chartreuse4")), 
-            locations = cells_body(columns = PercentageChangePretty, 
-                                   rows = PercentageChange > 0))  %>% 
-  gt_theme_538() %>%
-  tab_options(heading.align = "center", row_group.font.weight = "bold", row_group.background.color = "turquoise", row.striping.background_color = "grey90") %>%
-  opt_row_striping() %>%
-  cols_align(align = "center", columns = c(TimePeriodDates:PercentageChangePretty))
+#Create a gt table showing % change before lockdown vs during
+TableData %>% gt() %>% 
+  #Table styling
+cols_hide(PercentageChange) %>% tab_header(title = "Mean Quantities of Contraception Dispensed by NHS Scotland", subtitle = "Between October 2015 and July 2020") %>% 
+  cols_label(TimePeriod = "Time Period", TimePeriodDates = "Dates", PercentageChangePretty = "Percentage Change", MeanPrescriptionsDispensedPerHealthBoardPerTimePeriod = "Mean Prescriptions Dispensed Per Month Per Health Board") %>%
+  tab_row_group(label = "LARC", rows = 1:2) %>% tab_row_group(label = "Oral Contraception", rows = 3:4) %>% tab_row_group(label = "Emergency Contraception", rows = 5:6) %>% cols_move(TimePeriodDates, after = TimePeriod) %>% 
+  fmt_integer(MeanPrescriptionsDispensedPerHealthBoardPerTimePeriod) %>% tab_style(style = list(cell_text(color = "red")), locations = cells_body(columns = PercentageChangePretty, rows = PercentageChange < 0)) %>% tab_style(style = list(cell_text(color = "chartreuse4")), locations = cells_body(columns = PercentageChangePretty, rows = PercentageChange > 0)) %>% gt_theme_538() %>% tab_options(heading.align = "center", row_group.font.weight = "bold", row_group.background.color = "turquoise", row.striping.background_color = "grey90") %>% opt_row_striping() %>% cols_align(align = "center", columns = c(TimePeriodDates:PercentageChangePretty))
 ```
 
 Here, we are exploring whether this effect is replicated across all
@@ -345,19 +336,23 @@ contraceptives instead.
 
 ## Are there differences in contraceptive prescribing between Health Boards?
 
-```{r, warning=FALSE, message=FALSE}
+```{r MapOverallChangesPlot, warning=FALSE, message=FALSE}
+#Create key for map plot of health boards (Panel A)
+MapKeyPlot <- ggplot(data = HealthBoardsSPDF) +
+  geom_sf(aes(fill = HealthBoardName)) +
+  theme_void() + ggtitle("Health Boards Key") + guides(fill=guide_legend(ncol = 2))
+#Create map plot of health board deprivation ranks (Panel B)
+MapDeprivationRanksPlot <- ggplot(data = HealthBoardsDeprivationSPDF) +
+  geom_sf(aes(fill = Rank)) +
+  scale_fill_brewer(palette = "Greens", direction = -1, labels = c("Least Deprived", " ", " ", " ", "Most Deprived"), "Health Board \nDeprivation Rank") +
+  theme_void() + ggtitle("Health Board Deprivation Ranks")
+#Create map plot of % change in prescriptions dispensed before vs during lockdown by health board (Panel C)
 MapPrescriptionChangePlot <- ggplot(data = HealthBoardsDifferenceSPDF) +
   geom_sf(aes(fill = Difference)) +
   scale_fill_distiller(palette = "Spectral", direction = 1) +
   theme_void() +
   facet_wrap(~ Type, nrow = 1) + ggtitle("Percentage Change Pre-Lockdown vs Lockdown 1")
-MapDeprivationRanksPlot <- ggplot(data = HealthBoardsDeprivationSPDF) +
-  geom_sf(aes(fill = Rank)) +
-  scale_fill_brewer(palette = "Greens", direction = -1, labels = c("Least Deprived", " ", " ", " ", "Most Deprived"), "Health Board \nDeprivation Rank") +
-  theme_void() + ggtitle("Health Board Deprivation Ranks")
-MapKeyPlot <- ggplot(data = HealthBoardsSPDF) +
-  geom_sf(aes(fill = HealthBoardName)) +
-  theme_void() + ggtitle("Health Boards Key") + guides(fill=guide_legend(ncol = 2))
+#Put panels together into patchwork plot
 MapPlotsPatchworkA <-  (MapKeyPlot + MapDeprivationRanksPlot) / MapPrescriptionChangePlot + plot_annotation(tag_levels = 'A', title = "Changes at the Health Board level are independent of deprivation.", subtitle = "There is no apparent pattern between the deprivation level of a Health Board and changes in the type or quantity of contraception dispensed.", caption = "EC: emergency contraception, LARC: long-acting reversible contraception, OC: oral contraception.")
 ```
 
@@ -366,30 +361,33 @@ Panel A). Health Boards have been ranked into one of 5 categories of
 mean deprivation based upon the SIMD vigintiles the data zones they
 contain fall into (Panel B).
 
-![](images/Rplot12.png){width="100mm"}
+![](images/Rplot12.png){width="145mm"}
 
 Looking at the percentage change of different types of contraception
 dispensed (Panel C), there does not appear to be a clear pattern linking
 the changes in either the type or quantity of contraceptives being
 prescribed and the overall deprivation of the Health Board (Panel B). It
 is clear that bar emergency contraception prescriptions in NHS Ayrshire
-and Arran, there is a large overall descrease in contraception
+and Arran, there is a large overall decrease in contraception
 prescriptions across Scotland in the lockdown of March 2020.
 
 ## How does deprivation affect contraceptive prescribing?
 
-```{r, warning=FALSE, message=FALSE}
+```{r MapDeprivationChangesPlot, warning=FALSE, message=FALSE}
+#Create map plot of SIMD vigintile 1 z-score changes in contraception prescribing before vs during Lockdown 1
 MapTypeChangesPlot1 <- MapTypeChangesPlot(1, "2020-03-01", "Reds") + ggtitle("Most Deprived Areas")
+#Create map plot of SIMD vigintile 20 z-score changes in contraception prescribing before vs during Lockdown 1
 MapTypeChangesPlot20 <- MapTypeChangesPlot(20, "2020-03-01", "Blues") + ggtitle("Least Deprived Areas") + guides(fill = guide_legend(nrow = 1))
+#Put panels together into patchwork plot
 MapPlotsPatchworkB <- MapTypeChangesPlot1 / MapTypeChangesPlot20 + plot_annotation(caption = "N.B. Islands have been removed as they have no data zones in Rank 20 or Rank 1.\nz-Score scale: mean (μ) ± n standard deviations (σ).\nEC: emergency contraception, LARC: long-acting reversible contraception, OC: oral contraception.", title =  "Deprivation affects the type and quantity of contraceptives prescribed in Lockdown.", subtitle = "Differences in contraceptive prescribing due to Covid-19 restrictions in Scotland from March to July 2020 compared with October 2015 to Februrary 2020.")
 ```
 
 Here, we look at whether differences exist between the most deprived
-(SIMD Viginitile 1), or least deprived (SIMD Viginitile 20), broken down
+(SIMD vigintile 1), or least deprived (SIMD vigintile 20), broken down
 by Health Board area. These results have been normalised, and are
 presented as z-scores.
 
-![](images/Rplot09.png){width="100mm"}
+![](images/Rplot09.png){width="155mm"}
 
 Some Health Boards, such as NHS Borders seem to have little difference
 between different forms of contraception, and between the areas of
@@ -412,26 +410,3 @@ In summary, we have seen:
 -   However, when the data are viewed more granularly at an individual
     Data Zone level, there does appear to be differences in prescribing
     within and between Health Boards.
-
-# Conclusion
-
-To return to our two hypotheses:
-
-1.  *"In Scotland, as in England, contraceptives prescribed in the
-    community changed due to Covid-19 lockdowns."*
-
-    -   Analysis of these data support that the same decrease is
-        observed. However, subsequent statistical work is required to
-        confirm the significance of this finding.
-
-2.  *"In Scotland, contraceptives prescribed in the community during
-    Covid-19 lockdowns differed by deprivation."*
-
-    -   The answer to this hypothesis is less clear. It does appear that
-        deprivation plays a role in the changes to type and quantity of
-        contraceptive prescriptions dispensed during March 2020.
-        However, this appears to vary more widely on a Health Board
-        basis than purely on deprivation alone. Further analysis,
-        perhaps looking at a smaller geographical unit may reveal these
-        differences, along with information about differences in Health
-        Board policies at the time.
